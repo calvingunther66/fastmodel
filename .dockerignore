@@ -1,0 +1,21 @@
+# Build context excludes — keep the image small and free of secrets/PII
+.git
+.gitignore
+**/__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Web build inputs we don't need (frontend is built inside the image)
+web/node_modules/
+web/dist/
+
+# Runtime state and private data — never bake into an image
+data/
+real_samples/
+extracted_images/
+out.json
+
+# Local docker env
+.env

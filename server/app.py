@@ -33,7 +33,7 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=config.SECRET_KEY,
     same_site="lax",
-    https_only=False,
+    https_only=config.SESSION_HTTPS_ONLY,
 )
 
 store = ScheduleStore()

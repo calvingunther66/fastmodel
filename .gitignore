@@ -15,3 +15,6 @@ web/dist/
 
 # Server runtime state (uploaded workbooks, parsed json, calendar tokens)
 data/
+
+# Docker env file with secrets (token, password) — keep .env.example only
+.env

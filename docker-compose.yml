@@ -1,0 +1,29 @@
+# One container: schedule web app + cloudflared tunnel.
+# Configure secrets in a .env file next to this one (see .env.example), then:
+#   docker compose up -d --build
+services:
+  schedule:
+    build: .
+    image: schedule
+    container_name: schedule
+    restart: unless-stopped
+    environment:
+      # --- app ---
+      APP_USERNAME: ${APP_USERNAME:-admin}
+      APP_PASSWORD: ${APP_PASSWORD:?set APP_PASSWORD in .env}
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+      TIMEZONE: ${TIMEZONE:-America/Los_Angeles}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://scheduler.calvingunther.com}
+      SESSION_HTTPS_ONLY: "true"
+      # --- cloudflared ---
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
+    volumes:
+      - schedule-data:/data
+    # No published ports needed: cloudflared dials out to Cloudflare and reaches
+    # the server over localhost inside the container. Uncomment to also expose
+    # the app on the LAN for testing:
+    # ports:
+    #   - "8000:8000"
+
+volumes:
+  schedule-data:

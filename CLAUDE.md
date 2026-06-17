@@ -27,7 +27,8 @@ Two layers:
 |-----|--------------|
 | **`docs/SCHEDULE_FORMAT.md`** | **The domain knowledge** — exact workbook layout, every shift code, every shift time, colours, availability rules. Most of this came from the schedule owner and is NOT derivable from the code. Start here to understand *why* the parser does what it does. |
 | **`docs/DECISIONS.md`** | Decisions made with the owner, rationale, and the list of **open items / future work**. |
-| **`DEPLOY_QUICKSTART.md`** | Copy-paste commands to deploy on the Pi. |
+| **`DOCKER.md`** | **Primary deploy:** single container bundling the app + cloudflared tunnel, exposed at `scheduler.calvingunther.com` (no open ports). |
+| **`DEPLOY_QUICKSTART.md`** | Alternative bare-metal Pi deploy (venv + systemd + Caddy). |
 | **`SERVER.md`** | Deploy reference — env vars, HTTPS/Caddy, systemd, and the *why*. |
 | **`README.md`** | CLI usage of the extractor + the generic layouts. |
 
@@ -61,6 +62,11 @@ web/                       React + Vite frontend (built to web/dist)
 tests/                     pytest (10 tests) — run with `python -m pytest`
 tools/make_sample.py       generate a synthetic workbook for the generic layout
 docs/                      detailed documentation (see table above)
+
+Dockerfile                 multi-stage: build web -> python runtime + cloudflared
+docker/entrypoint.sh       runs uvicorn + cloudflared together in one container
+docker-compose.yml         one-command run; reads secrets from .env
+.env.example               template for .env (APP_PASSWORD, SECRET_KEY, TUNNEL_TOKEN)
 
 data/                      RUNTIME state (uploaded xlsx, parsed json, tokens) — gitignored
 real_samples/              the owner's real workbook + outputs — gitignored (PII)

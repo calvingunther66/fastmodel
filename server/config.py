@@ -24,6 +24,12 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", "data")).resolve()
 TIMEZONE = os.environ.get("TIMEZONE", "America/Los_Angeles")
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
 
+# Mark the session cookie Secure (HTTPS-only). Turn on when served over HTTPS,
+# e.g. behind a Cloudflare tunnel: SESSION_HTTPS_ONLY=true
+SESSION_HTTPS_ONLY = os.environ.get("SESSION_HTTPS_ONLY", "false").lower() in (
+    "1", "true", "yes", "on",
+)
+
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 USING_DEFAULT_PASSWORD = APP_PASSWORD == "changeme"
