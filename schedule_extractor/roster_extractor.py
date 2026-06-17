@@ -20,6 +20,13 @@ from __future__ import annotations
 import datetime as dt
 import re
 
+from .definitions import (
+    OFFSET_LEVEL,
+    decode,
+    is_green_fill,
+    shift_window,
+)
+
 # A shift code is a short alphabetic token (plus the "*" marker), e.g.
 # BC, H, R, V, A, UL, OK, no, *. Anything else is treated as a note.
 _CODE_RE = re.compile(r"^[A-Za-z*]{1,3}$")
@@ -120,11 +127,12 @@ def extract_roster(ws, *, default_year: int = 2026,
             if ws.cell(r, 1).value not in (None, "")
         ]
 
-        # Group each date column's codes by day/night, tracking 'no' availability.
-        by_date: dict[str, dict] = {}
+        # Collect raw records per date column, tracking 'no' availability and
+        # keeping the cell (for fill colour -> approved vacation).
+        records = []  # (date, offset, code, cell)
+        unavailable_dates: set[str] = set()
         notes = []
         for offset, r in enumerate(block_rows):
-            shift_type = "day" if offset == 0 else "night"
             for cell in ws[r]:
                 c = cell.column
                 v = cell.value
@@ -135,45 +143,61 @@ def extract_roster(ws, *, default_year: int = 2026,
                     continue
                 if c in date_col_set:
                     date = date_axis[c]
-                    slot = by_date.setdefault(
-                        date, {"day": [], "night": [], "unavailable": False}
-                    )
                     is_no, affected = _parse_no(text)
                     if is_no:
-                        slot["unavailable"] = True
+                        unavailable_dates.add(date)
                         if affected and _is_code(affected):
-                            slot[shift_type].append(affected)
+                            records.append((date, offset, affected, cell))
                     elif _is_code(text):
-                        slot[shift_type].append(text)
+                        records.append((date, offset, text, cell))
                     else:
                         notes.append({"date": date, "text": text})
                 elif c > last_date_col:
                     # free-text note column to the right of the calendar
                     notes.append({"date": None, "text": text})
 
+        # A date is "split" when both the day row and the mid row are filled.
+        offsets_by_date: dict[str, set[int]] = {}
+        for date, offset, _code, _cell in records:
+            offsets_by_date.setdefault(date, set()).add(offset)
+        split_dates = {d for d, offs in offsets_by_date.items() if 0 in offs and 1 in offs}
+
         shifts = []
-        unavailable = []
-        for date, slot in by_date.items():
-            for st in ("day", "night"):
-                for code in slot[st]:
-                    shifts.append({
-                        "date": date,
-                        "code": code,
-                        "shift_type": st,
-                        "available": not slot["unavailable"],
-                    })
-            if slot["unavailable"]:
-                unavailable.append(
-                    {"date": date, "reason": "not available / out sick"}
-                )
+        for date, offset, code, cell in records:
+            shift_type = OFFSET_LEVEL.get(offset, "night")
+            info = decode(code)
+            start, end, crosses = shift_window(code, shift_type)
+            shift = {
+                "date": date,
+                "code": code,
+                "shift_type": shift_type,
+                "category": info["category"],
+                "meaning": info["meaning"],
+                "start": start,
+                "end": end,
+                "crosses_midnight": crosses,
+                "available": date not in unavailable_dates,
+            }
+            if date in split_dates and offset in (0, 1):
+                shift["split_day"] = True
+            if code.strip().upper() == "V":
+                shift["approved"] = is_green_fill(cell)
+            shifts.append(shift)
+
+        unavailable = [
+            {"date": d, "reason": "not available / out sick"}
+            for d in sorted(unavailable_dates)
+        ]
 
         has_content = bool(name) or shifts or notes or unavailable
         if has_content:
             entry = {
                 "name": (str(name).strip() if name not in (None, "") else None),
                 "contact": contact,
-                "shifts": sorted(shifts, key=lambda s: (s["date"], s["shift_type"])),
-                "unavailable": sorted(unavailable, key=lambda u: u["date"]),
+                "shifts": sorted(
+                    shifts, key=lambda s: (s["date"], s["shift_type"], s["code"])
+                ),
+                "unavailable": unavailable,
                 "notes": notes,
             }
             if entry["name"] is None:

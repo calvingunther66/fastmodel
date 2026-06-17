@@ -86,17 +86,34 @@ python -m pytest                                             # run the tests
 ## Blocked-roster layout (`--layout roster`)
 
 Some real rosters encode the schedule by **box position** rather than by a flat
-grid. In the sample worked here, each person is a 3-row box (name on top, two
-contact rows below), the date numbers live on row 2 (with month rollover), and:
+grid. Each person is a 3-row box (name on top, two contact rows below), the date
+numbers live on row 2 (with month rollover), and a code's **vertical level**
+inside the box sets the shift level:
 
-- a code on the **top row, level with the name, is a DAY shift**;
-- a code sitting **lower in the box is a NIGHT shift** (the "smaller bottom box");
-- short alphabetic tokens (`BC`, `H`, `R`, `V`, `A`, `UL`, `OK`, `*`, …) are
-  treated as shift codes; anything longer/free-text is captured as a **note**;
+- **top row** (level with the name) = **day** shift;
+- **middle row** = **midshift** — the second half of a *split* day (e.g. `BC`
+  then `T`); rare. When both top and middle are filled for a date, both shifts
+  get `"split_day": true`;
+- **bottom row** = **night** shift.
+
+Other rules:
+
+- short alphabetic tokens are shift codes; longer/free-text is captured as a
+  **note**;
 - a cell of **`no`** (or `no <code>`) is an **availability flag**: the person is
   not available / out sick that day. Those dates appear in the person's
-  `unavailable` list, and any shift on that date is marked `"available": false`
-  — i.e. the shift that needs covering when someone calls out.
+  `unavailable` list, and any shift on that date is `"available": false` — the
+  shift that needs covering when someone calls out;
+- codes are **decoded** via `schedule_extractor/definitions.py` into a
+  `category` (`location` / `status` / `unknown`) and a `meaning`
+  (e.g. `BC` → Birth Center, `HC` → Hillcrest, `V` → Vacation, `R` → Request);
+- **timings** are filled where known: any **night** shift = `19:30`–`08:00`
+  (crosses midnight); **triage** (`T`) = `07:30`–`18:00`; day-shift length varies
+  by location so day `start`/`end` are left `null` until a day-hours table is set;
+- a **green-filled `V`** is approved vacation → `"approved": true` (no fill →
+  `false`).
+
+Edit `definitions.py` to add codes, locations, or timing windows.
 
 ```bash
 python -m schedule_extractor roster.xlsx --layout roster \
@@ -110,8 +127,9 @@ Output (per person):
   "name": "CHOI",
   "contact": ["C: 417-342-4960", "P: TXT TO CELL"],
   "shifts": [
-    {"date": "2026-07-03", "code": "H",  "shift_type": "day",   "available": true},
-    {"date": "2026-07-03", "code": "BC", "shift_type": "night", "available": true}
+    {"date": "2026-07-03", "code": "BC", "shift_type": "night",
+     "category": "location", "meaning": "Birth Center",
+     "start": "19:30", "end": "08:00", "crosses_midnight": true, "available": true}
   ],
   "unavailable": [],
   "notes": [{"date": null, "text": "Husband will be working ... Available for nights on 7/14"}]
