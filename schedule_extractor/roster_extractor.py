@@ -113,14 +113,27 @@ def extract_roster(ws, *, default_year: int = 2026,
     last_date_col = max(c for c, _ in day_cols)
     date_col_set = {c for c, _ in day_cols}
 
+    max_row = ws.max_row
+
+    # Find the last real person block so the footer/legend (which sits in the
+    # same column-A position but holds a code key, not names) isn't parsed as
+    # people. A person name is non-empty and has no ':' (contact rows do).
+    last_person_top = first_block_row
+    r0 = first_block_row
+    while r0 <= max_row:
+        a = ws.cell(r0, 1).value
+        if a not in (None, "") and ":" not in str(a):
+            last_person_top = r0
+        r0 += block_size
+    scan_end = last_person_top + block_size - 1
+
     people = []
     row = first_block_row
-    max_row = ws.max_row
-    while row <= max_row:
+    while row <= scan_end:
         name = ws.cell(row, 1).value
         # A block exists wherever there is content on its top row; an empty
         # name still anchors a block (recorded as an unnamed entry).
-        block_rows = list(range(row, min(row + block_size, max_row + 1)))
+        block_rows = list(range(row, min(row + block_size, scan_end + 1)))
         contact = [
             str(ws.cell(r, 1).value).strip()
             for r in block_rows[1:]
