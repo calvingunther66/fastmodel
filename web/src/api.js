@@ -26,6 +26,26 @@ export const api = {
   people: () => req("/api/people"),
   reparse: (sheet) =>
     req("/api/schedule/reparse", { method: "POST", body: JSON.stringify({ sheet }) }),
+  // user management (manage_users)
+  users: () => req("/api/users"),
+  createUser: (body) => req("/api/users", { method: "POST", body: JSON.stringify(body) }),
+  updateUser: (username, body) =>
+    req(`/api/users/${encodeURIComponent(username)}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteUser: (username) =>
+    req(`/api/users/${encodeURIComponent(username)}`, { method: "DELETE" }),
+
+  // self-service (member)
+  availability: () => req("/api/availability"),
+  myCallout: (date, shift_type) =>
+    req("/api/me/callout", { method: "POST", body: JSON.stringify({ date, shift_type }) }),
+  myCalloutClear: (date, shift_type) =>
+    req("/api/me/callout/clear", { method: "POST", body: JSON.stringify({ date, shift_type }) }),
+  myOffer: (date) => req("/api/me/offer", { method: "POST", body: JSON.stringify({ date }) }),
+  myOfferRemove: (date) =>
+    req("/api/me/offer/remove", { method: "POST", body: JSON.stringify({ date }) }),
+  myContact: (contact) =>
+    req("/api/me/contact", { method: "POST", body: JSON.stringify({ contact }) }),
+
   callouts: () => req("/api/coverage/callouts"),
   sick: (name, date, shift_type) =>
     req("/api/coverage/sick", { method: "POST", body: JSON.stringify({ name, date, shift_type }) }),

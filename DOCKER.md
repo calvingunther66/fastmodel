@@ -66,8 +66,30 @@ git pull
 docker compose up -d --build    # rebuilds frontend + image, restarts container
 ```
 
-Your uploaded schedule and calendar tokens live in the `schedule-data` volume,
-so they survive rebuilds (calendar links don't change).
+**Rebuilding never touches your data.** Everything mutable lives in the named
+volume `schedule-data` (mounted at `/data`): the uploaded workbook, parsed
+schedule, **accounts**, calendar tokens, call-outs, availability offers, contact
+edits, and the session signing key. `up -d --build` only replaces the code/image,
+so accounts, history, links, and logins all carry over. Calendar subscriptions
+keep working (tokens are stable) and users stay logged in (the key persists).
+
+So when you ask me for code changes later, the flow is just `git pull` →
+`docker compose up -d --build`; nothing is reset.
+
+### Back up / restore the data
+
+```bash
+# Back up the whole data volume to a tarball in the current directory
+docker run --rm -v schedule-data:/data -v "$PWD":/backup alpine \
+  tar czf /backup/schedule-data-$(date +%F).tgz -C /data .
+
+# Restore it
+docker run --rm -v schedule-data:/data -v "$PWD":/backup alpine \
+  sh -c "rm -rf /data/* && tar xzf /backup/schedule-data-YYYY-MM-DD.tgz -C /data"
+```
+
+> ⚠️ The only thing that deletes data is `docker compose down -v` (the `-v`
+> removes the volume). Use plain `docker compose down` to stop without data loss.
 
 ## Notes & troubleshooting
 

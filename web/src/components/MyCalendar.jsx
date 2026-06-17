@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
 import { timeLabel } from "../utils.js";
 
-export default function MyCalendar({ schedule }) {
+export default function MyCalendar({ schedule, user }) {
   const [people, setPeople] = useState([]);
-  const [name, setName] = useState("");
+  const [name, setName] = useState(user?.person || "");
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {

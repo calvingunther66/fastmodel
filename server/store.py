@@ -32,6 +32,8 @@ class ScheduleStore:
         self.schedule_path = data_dir / "schedule.json"
         self.tokens_path = data_dir / "tokens.json"
         self.overrides_path = data_dir / "overrides.json"
+        self.contacts_path = data_dir / "contacts.json"
+        self.offers_path = data_dir / "availability.json"
         self._lock = threading.Lock()
 
     # ---- low-level json helpers ------------------------------------------
@@ -94,12 +96,51 @@ class ScheduleStore:
         return self._read_json(self.schedule_path, None)
 
     def get_schedule(self) -> dict | None:
-        """The schedule with call-outs flagged and assigned covers injected."""
+        """The schedule with call-outs flagged, covers injected, contact overrides
+        applied. Always a fresh copy (safe to mutate by callers)."""
         base = self._read_json(self.schedule_path, None)
         if base is None:
             return None
-        callouts = self._callouts()
-        return apply_overrides(base, callouts) if callouts else base
+        sched = apply_overrides(base, self._callouts())  # deep-copies even if empty
+        contacts = self._contacts()
+        if contacts:
+            for p in sched.get("people", []):
+                if p.get("name") in contacts:
+                    p["contact"] = contacts[p["name"]]
+        return sched
+
+    # ---- contact overrides (members edit their own) ----------------------
+    def _contacts(self) -> dict:
+        return self._read_json(self.contacts_path, {})
+
+    def set_contact(self, person: str, lines: list[str]) -> None:
+        with self._lock:
+            contacts = self._contacts()
+            contacts[person] = [str(line).strip() for line in lines if str(line).strip()]
+            self._write_json(self.contacts_path, contacts)
+
+    # ---- availability offers (people offering to cover) ------------------
+    def _offers(self) -> list[dict]:
+        return self._read_json(self.offers_path, {}).get("offers", [])
+
+    def list_offers(self) -> list[dict]:
+        return self._offers()
+
+    def add_offer(self, person: str, date: str, note: str = "") -> None:
+        with self._lock:
+            offers = self._offers()
+            if not any(o["person"] == person and o["date"] == date for o in offers):
+                offers.append({"person": person, "date": date, "note": note})
+                self._write_json(self.offers_path, {"offers": offers})
+
+    def remove_offer(self, person: str, date: str) -> None:
+        with self._lock:
+            offers = [o for o in self._offers()
+                      if not (o["person"] == person and o["date"] == date)]
+            self._write_json(self.offers_path, {"offers": offers})
+
+    def offers_for_date(self, date: str) -> set[str]:
+        return {o["person"] for o in self._offers() if o["date"] == date}
 
     # ---- call-out overrides ----------------------------------------------
     def _callouts(self) -> list[dict]:

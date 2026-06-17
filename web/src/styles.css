@@ -195,3 +195,29 @@ button.ghost.small { padding: 2px 8px; font-size: 0.78rem; }
 .callout-list .when { color: var(--muted); font-size: 0.85rem; }
 .callout-list .open { color: var(--red); font-weight: 600; }
 .callout-list .covered { color: var(--green); font-weight: 600; }
+
+/* who am I / role */
+.who-am-i { font-size: 0.8rem; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.role-tag {
+  font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em;
+  background: #e0e7ff; color: #3730a3; padding: 1px 6px; border-radius: 4px;
+}
+button.ghost.danger { color: var(--red); border-color: #f3c2c2; }
+
+/* Users admin */
+.user-form {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  padding: 12px; background: #fafbfc; border: 1px solid var(--line); border-radius: 8px;
+  margin-bottom: 14px;
+}
+.user-form input, .user-form select { min-width: 120px; }
+.caps { display: inline-flex; gap: 10px; flex-wrap: wrap; }
+.caps label { flex-direction: row; align-items: center; gap: 3px; font-size: 0.78rem; color: var(--ink); }
+.users-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.users-table th, .users-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.user-actions { display: flex; gap: 6px; }
+
+/* availability */
+.offer-list { list-style: none; padding: 0; margin: 6px 0; }
+.offer-list li { display: flex; justify-content: space-between; max-width: 280px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+textarea { width: 100%; max-width: 420px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; font: inherit; }

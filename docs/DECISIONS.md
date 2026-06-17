@@ -44,6 +44,20 @@ reasoning, and what's still open. Useful when resuming with no chat history.
 - **Schedule input:** admin **uploads** the `.xlsx` through the web UI each period.
 - **Timezone:** `America/Los_Angeles` (San Diego), overridable via `TIMEZONE`.
 
+### Accounts & persistence
+- **Per-person accounts** replaced the shared password. Roles `admin`/`member`
+  plus delegatable capabilities (`upload`, `manage_coverage`, `manage_users`) —
+  chosen over fixed roles so an admin can hand out specific powers. A bootstrap
+  admin is defined by env (`APP_USERNAME`/`APP_PASSWORD`), re-synced on startup
+  and `protected` so you can't be locked out. Passwords are PBKDF2 (stdlib).
+- **Members self-serve:** call out of their own shifts, offer days they can cover
+  (which boosts them in coverage proposals), edit their own contact info, and view
+  the whole team. See `docs/ACCOUNTS.md`.
+- **Everything persists in `DATA_DIR`** (the Docker volume): accounts, schedule,
+  tokens, call-outs, offers, contact edits, and a persisted `secret_key` so logins
+  survive restarts/rebuilds. `docker compose up -d --build` never resets data; only
+  `down -v` deletes the volume. Backup/restore documented in `DOCKER.md`.
+
 ## Open items / future work
 
 - **Clinic split (morning/afternoon)** detection via a coloured center bar is

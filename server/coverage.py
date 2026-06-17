@@ -76,7 +76,7 @@ def find_open_shift(schedule: dict, name: str, date: str, shift_type: str) -> di
     return None
 
 
-def _free_candidates(schedule, date, code, shift_type, exclude, profiles):
+def _free_candidates(schedule, date, code, shift_type, exclude, profiles, offered=frozenset()):
     """Ranked people who are free/available to take a (date, code, shift_type) shift."""
     open_code = (code or "").upper()
     meaning = decode(code)["meaning"] if code else None
@@ -92,6 +92,9 @@ def _free_candidates(schedule, date, code, shift_type, exclude, profiles):
             continue
         qualified = open_code in prof["codes"] if open_code else False
         reasons, score = [], 0
+        if cand in offered:
+            score += 30
+            reasons.append("offered to cover this day")
         if state == "available":
             score += 50
             reasons.append("on the Available / on-call pool that day")
@@ -183,15 +186,19 @@ def _cascades(schedule, sick_name, date, open_code, open_type, moves, profiles):
     return cascades
 
 
-def propose(schedule: dict, name: str, date: str, shift_type: str) -> dict:
-    """Return coverage proposals for the open shift (name, date, shift_type)."""
+def propose(schedule: dict, name: str, date: str, shift_type: str,
+            offered=frozenset()) -> dict:
+    """Return coverage proposals for the open shift (name, date, shift_type).
+
+    `offered` is the set of people who have declared they can cover that date.
+    """
     open_shift = find_open_shift(schedule, name, date, shift_type)
     open_code = (open_shift or {}).get("code", "") or ""
     open_meaning = (open_shift or {}).get("meaning")
 
     profiles = _profiles(schedule)
     exclude = {name}
-    free = _free_candidates(schedule, date, open_code, shift_type, exclude, profiles)
+    free = _free_candidates(schedule, date, open_code, shift_type, exclude, profiles, offered)
     moves = _move_candidates(schedule, date, open_code, shift_type, exclude, profiles)
     cascades = _cascades(schedule, name, date, open_code.upper(), shift_type, moves, profiles)
 

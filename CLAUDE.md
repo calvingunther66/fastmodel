@@ -18,16 +18,19 @@ Two layers:
    (`roster_extractor.py`); the generic grid/OCR parser is a secondary fallback.
 2. **`server/` + `web/`** — a FastAPI backend and a React (Vite) frontend, run as
    **one process**, intended to self-host on a Raspberry Pi behind the user's
-   domain. Shared login; admin uploads the `.xlsx`; each person picks their name
-   and gets a live calendar link.
+   domain. **Per-person accounts** with roles/capabilities (a bootstrap admin from
+   env); admins upload the `.xlsx` and manage accounts; members view the team,
+   get a live calendar link, call out of shifts, and offer days they can cover.
+   All state persists in `data/` (the Docker volume) — see `docs/ACCOUNTS.md`.
 
 ## Read next (detailed docs)
 
 | Doc | What's in it |
 |-----|--------------|
 | **`docs/SCHEDULE_FORMAT.md`** | **The domain knowledge** — exact workbook layout, every shift code, every shift time, colours, availability rules. Most of this came from the schedule owner and is NOT derivable from the code. Start here to understand *why* the parser does what it does. |
+| **`docs/ACCOUNTS.md`** | Accounts, roles & capabilities, member self-service, and where it lives in code. |
 | **`docs/DECISIONS.md`** | Decisions made with the owner, rationale, and the list of **open items / future work**. |
-| **`DOCKER.md`** | **Primary deploy:** single container bundling the app + cloudflared tunnel, exposed at `scheduler.calvingunther.com` (no open ports). |
+| **`DOCKER.md`** | **Primary deploy:** single container bundling the app + cloudflared tunnel, exposed at `scheduler.calvingunther.com` (no open ports). Includes data persistence + backup. |
 | **`DEPLOY_QUICKSTART.md`** | Alternative bare-metal Pi deploy (venv + systemd + Caddy). |
 | **`SERVER.md`** | Deploy reference — env vars, HTTPS/Caddy, systemd, and the *why*. |
 | **`README.md`** | CLI usage of the extractor + the generic layouts. |
@@ -47,17 +50,20 @@ schedule_extractor/        Python parser
   output.py / models.py    JSON serialisation + dataclasses (generic layout)
 
 server/                    FastAPI app (serves API + built React app)
-  app.py                   routes: /api/*, public /calendar/<token>.ics, SPA
-  store.py                 ScheduleStore: upload/parse/persist + tokens + call-outs
-  coverage.py              trial: cover-suggestion engine + call-out overrides
+  app.py                   routes: auth, /api/*, self-service, /calendar/<token>.ics, SPA
+  accounts.py              AccountStore: users.json, PBKDF2 hashing, roles + capabilities
+  store.py                 ScheduleStore: upload/parse/persist + tokens + call-outs +
+                             availability offers + contact overrides
+  coverage.py              cover-suggestion engine (free/move/cascade) + overrides
   ical.py                  build_ics(): shifts -> VCALENDAR
-  config.py                env-var configuration
+  config.py                env-var config + persistent SECRET_KEY
   __main__.py              `python -m server` (uvicorn)
   requirements.txt         server-only deps
 
 web/                       React + Vite frontend (built to web/dist)
-  src/App.jsx              shell: login gate + tabs
-  src/components/          Login, ScheduleGrid, MyCalendar, Coverage, Admin
+  src/App.jsx              shell: login + role-aware tabs
+  src/components/          Login, ScheduleGrid, MyCalendar, MyAvailability,
+                             Coverage, Admin (upload), Users (accounts)
   src/api.js, utils.js     fetch wrapper, date/colour helpers
 
 tests/                     pytest (10 tests) — run with `python -m pytest`
