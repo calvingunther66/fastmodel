@@ -46,6 +46,9 @@ export const api = {
   myContact: (contact) =>
     req("/api/me/contact", { method: "POST", body: JSON.stringify({ contact }) }),
 
+  audit: (limit = 200) => req(`/api/audit?limit=${limit}`),
+  coverageStats: () => req("/api/coverage/stats"),
+
   callouts: () => req("/api/coverage/callouts"),
   sick: (name, date, shift_type) =>
     req("/api/coverage/sick", { method: "POST", body: JSON.stringify({ name, date, shift_type }) }),

@@ -22,7 +22,7 @@ import openpyxl
 from schedule_extractor.roster_extractor import extract_roster
 
 from .config import DATA_DIR
-from .coverage import apply_overrides
+from .coverage import apply_overrides, find_open_shift
 
 
 class ScheduleStore:
@@ -34,6 +34,7 @@ class ScheduleStore:
         self.overrides_path = data_dir / "overrides.json"
         self.contacts_path = data_dir / "contacts.json"
         self.offers_path = data_dir / "availability.json"
+        self.stats_path = data_dir / "stats.json"
         self._lock = threading.Lock()
 
     # ---- low-level json helpers ------------------------------------------
@@ -79,6 +80,7 @@ class ScheduleStore:
             result = self._parse(sheet_name)
             self._write_json(self.schedule_path, result)
             self._ensure_tokens(result)
+            self._record_work(result)
             return result
 
     def reparse(self, sheet_name: str) -> dict:
@@ -89,6 +91,7 @@ class ScheduleStore:
             result = self._parse(sheet_name)
             self._write_json(self.schedule_path, result)
             self._ensure_tokens(result)
+            self._record_work(result)
             return result
 
     def get_raw_schedule(self) -> dict | None:
@@ -142,6 +145,69 @@ class ScheduleStore:
     def offers_for_date(self, date: str) -> set[str]:
         return {o["person"] for o in self._offers() if o["date"] == date}
 
+    # ---- adaptive stats: work frequency + cover step-ups -----------------
+    def _stats(self) -> dict:
+        return self._read_json(self.stats_path, {"work_by_period": {}, "covers": {}})
+
+    def _record_work(self, result: dict) -> None:
+        """Fold this schedule period's worked-shift counts into the stats store.
+
+        Keyed by period so re-parsing the same period replaces (not double-counts);
+        distinct periods accumulate, so the picture sharpens as more are uploaded.
+        """
+        # Key by the schedule's date range so re-parsing the same period (e.g.
+        # switching from a draft sheet to the final one) replaces rather than
+        # double-counts; genuinely new periods accumulate.
+        dr = result.get("date_range", {}) or {}
+        period = f"{dr.get('start')}..{dr.get('end')}"
+        counts: dict = {}
+        for p in result.get("people", []):
+            name = p.get("name")
+            if not name:
+                continue
+            by_code, by_type, total = {}, {}, 0
+            for s in p["shifts"]:
+                if s.get("category") == "location":
+                    code = s["code"].upper()
+                    st = s["shift_type"]
+                    by_code[code] = by_code.get(code, 0) + 1
+                    by_type[st] = by_type.get(st, 0) + 1
+                    total += 1
+            if total:
+                counts[name] = {"by_code": by_code, "by_type": by_type, "total": total}
+        stats = self._stats()
+        stats["work_by_period"][period] = counts
+        self._write_json(self.stats_path, stats)
+
+    def _bump_cover(self, person: str, code: str | None, shift_type: str) -> None:
+        stats = self._stats()
+        c = stats.setdefault("covers", {}).setdefault(
+            person, {"count": 0, "by_code": {}, "by_type": {}})
+        c["count"] += 1
+        if code:
+            c["by_code"][code.upper()] = c["by_code"].get(code.upper(), 0) + 1
+        if shift_type:
+            c["by_type"][shift_type] = c["by_type"].get(shift_type, 0) + 1
+        self._write_json(self.stats_path, stats)
+
+    def aggregated_stats(self) -> dict:
+        """Per-person totals across all periods, plus cover step-up counts."""
+        stats = self._stats()
+        work: dict = {}
+        for counts in stats.get("work_by_period", {}).values():
+            for name, c in counts.items():
+                w = work.setdefault(name, {"by_code": {}, "by_type": {}, "total": 0})
+                for k, v in c["by_code"].items():
+                    w["by_code"][k] = w["by_code"].get(k, 0) + v
+                for k, v in c["by_type"].items():
+                    w["by_type"][k] = w["by_type"].get(k, 0) + v
+                w["total"] += c["total"]
+        return {
+            "work": work,
+            "covers": stats.get("covers", {}),
+            "periods": len(stats.get("work_by_period", {})),
+        }
+
     # ---- call-out overrides ----------------------------------------------
     def _callouts(self) -> list[dict]:
         return self._read_json(self.overrides_path, {}).get("callouts", [])
@@ -167,19 +233,26 @@ class ScheduleStore:
                 })
                 self._save_callouts(callouts)
 
-    def assign_cover(self, name: str, date: str, shift_type: str, covered_by: str) -> None:
+    def assign_cover(self, name: str, date: str, shift_type: str, covered_by: str,
+                     code: str | None = None) -> None:
         with self._lock:
             callouts = self._callouts()
             for c in callouts:
                 if self._same(c, name, date, shift_type):
                     c["covered_by"] = covered_by
+                    code = code or c.get("code")
                     break
             else:
                 callouts.append({
                     "name": name, "date": date, "shift_type": shift_type,
-                    "code": None, "reason": "out sick", "covered_by": covered_by,
+                    "code": code, "reason": "out sick", "covered_by": covered_by,
                 })
             self._save_callouts(callouts)
+            # Record the step-up so the scorer learns who reliably covers.
+            if code is None:
+                shift = find_open_shift(self.get_raw_schedule() or {}, name, date, shift_type)
+                code = (shift or {}).get("code")
+            self._bump_cover(covered_by, code, shift_type)
 
     def assign_cascade(self, name: str, date: str, shift_type: str,
                        mover: str, from_code: str | None, from_type: str,
@@ -191,7 +264,7 @@ class ScheduleStore:
         # 2) the mover's own slot becomes a call-out, backfilled by `backfill`
         self.mark_sick(mover, date, from_type, code=from_code,
                        reason=f"moved to cover {name}")
-        self.assign_cover(mover, date, from_type, backfill)
+        self.assign_cover(mover, date, from_type, backfill, code=from_code)
 
     def clear_callout(self, name: str, date: str, shift_type: str) -> None:
         with self._lock:

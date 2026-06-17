@@ -9,6 +9,7 @@ export default function Coverage({ schedule, onChange }) {
   const [proposal, setProposal] = useState(null);
   const [callouts, setCallouts] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [stats, setStats] = useState(null);
 
   const person = people.find((p) => p.name === name);
   // Only real worked assignments make sense to call out.
@@ -19,7 +20,12 @@ export default function Coverage({ schedule, onChange }) {
   }
   useEffect(() => {
     refreshCallouts();
+    api.coverageStats().then(setStats).catch(() => setStats(null));
   }, [schedule]);
+
+  const totalCovers = stats
+    ? Object.values(stats.covers || {}).reduce((a, c) => a + (c.count || 0), 0)
+    : 0;
 
   async function markSick(s) {
     setBusy(true);
@@ -78,6 +84,14 @@ export default function Coverage({ schedule, onChange }) {
         who could cover or be moved. Assigning a cover updates the grid and that
         person’s calendar feed.
       </p>
+      {stats && (
+        <p className="adaptive-note">
+          🧠 Ranking adapts from history: learned from {stats.periods} schedule
+          period{stats.periods === 1 ? "" : "s"} and {totalCovers} past cover
+          {totalCovers === 1 ? "" : "s"}. People who work a shift often and step up
+          to cover rank higher.
+        </p>
+      )}
 
       <label className="picker">
         Who is out:

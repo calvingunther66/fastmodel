@@ -53,8 +53,9 @@ server/                    FastAPI app (serves API + built React app)
   app.py                   routes: auth, /api/*, self-service, /calendar/<token>.ics, SPA
   accounts.py              AccountStore: users.json, PBKDF2 hashing, roles + capabilities
   store.py                 ScheduleStore: upload/parse/persist + tokens + call-outs +
-                             availability offers + contact overrides
-  coverage.py              cover-suggestion engine (free/move/cascade) + overrides
+                             availability offers + contact overrides + adaptive stats
+  coverage.py              cover-suggestion engine (free/move/cascade), adaptive scoring
+  audit.py                 AuditLog: append-only activity log (audit.jsonl)
   ical.py                  build_ics(): shifts -> VCALENDAR
   config.py                env-var config + persistent SECRET_KEY
   __main__.py              `python -m server` (uvicorn)
@@ -63,7 +64,7 @@ server/                    FastAPI app (serves API + built React app)
 web/                       React + Vite frontend (built to web/dist)
   src/App.jsx              shell: login + role-aware tabs
   src/components/          Login, ScheduleGrid, MyCalendar, MyAvailability,
-                             Coverage, Admin (upload), Users (accounts)
+                             Coverage, Admin (upload), Users (accounts), Activity (log)
   src/api.js, utils.js     fetch wrapper, date/colour helpers
 
 tests/                     pytest (10 tests) — run with `python -m pytest`

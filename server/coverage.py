@@ -76,7 +76,38 @@ def find_open_shift(schedule: dict, name: str, date: str, shift_type: str) -> di
     return None
 
 
-def _free_candidates(schedule, date, code, shift_type, exclude, profiles, offered=frozenset()):
+def _adaptive_bonus(cand, open_code, shift_type, stats, reasons):
+    """History-based score added on top of the static heuristics.
+
+    Rewards people who work this location often and who have reliably stepped up
+    to cover before, so suggestions get smarter the more the system is used.
+    """
+    if not stats:
+        return 0
+    bonus = 0
+    work = stats.get("work", {}).get(cand, {})
+    covers = stats.get("covers", {}).get(cand, {})
+
+    worked_loc = work.get("by_code", {}).get(open_code, 0)
+    if worked_loc:
+        b = min(15, worked_loc * 2)
+        bonus += b
+        reasons.append(f"works {open_code} regularly ({worked_loc}× on record)")
+    if shift_type == "night":
+        nights = work.get("by_type", {}).get("night", 0)
+        if nights:
+            bonus += min(10, nights)
+            reasons.append(f"works nights regularly ({nights}× on record)")
+
+    stepped = covers.get("count", 0)
+    if stepped:
+        bonus += min(20, stepped * 5)
+        reasons.append(f"has stepped up to cover {stepped}× before")
+    return bonus
+
+
+def _free_candidates(schedule, date, code, shift_type, exclude, profiles,
+                     offered=frozenset(), stats=None):
     """Ranked people who are free/available to take a (date, code, shift_type) shift."""
     open_code = (code or "").upper()
     meaning = decode(code)["meaning"] if code else None
@@ -113,6 +144,7 @@ def _free_candidates(schedule, date, code, shift_type, exclude, profiles, offere
             else:
                 score -= 5
                 reasons.append("no record of night shifts")
+        score += _adaptive_bonus(cand, open_code, shift_type, stats, reasons)
         out.append({
             "name": cand, "contact": p.get("contact", []),
             "status": state, "qualified": qualified, "score": score, "reasons": reasons,
@@ -121,7 +153,7 @@ def _free_candidates(schedule, date, code, shift_type, exclude, profiles, offere
     return out
 
 
-def _move_candidates(schedule, date, code, shift_type, exclude, profiles):
+def _move_candidates(schedule, date, code, shift_type, exclude, profiles, stats=None):
     """Ranked people working a reassignable shift who are qualified for the open one."""
     open_code = (code or "").upper()
     meaning = decode(code)["meaning"] if code else None
@@ -145,6 +177,7 @@ def _move_candidates(schedule, date, code, shift_type, exclude, profiles):
         if cur_type in ("day", "midshift") and cur_code not in ("BC", "HC"):
             score += 10
             reasons.append("current assignment looks reassignable")
+        score += _adaptive_bonus(cand, open_code, shift_type, stats, reasons)
         out.append({
             "name": cand, "contact": p.get("contact", []),
             "currently": f"{cur_meaning} ({cur_type})",
@@ -155,7 +188,7 @@ def _move_candidates(schedule, date, code, shift_type, exclude, profiles):
     return out
 
 
-def _cascades(schedule, sick_name, date, open_code, open_type, moves, profiles):
+def _cascades(schedule, sick_name, date, open_code, open_type, moves, profiles, stats=None):
     """For each move candidate, find a free backfill for their vacated slot."""
     open_meaning = decode(open_code)["meaning"] if open_code else open_code
     cascades = []
@@ -163,7 +196,7 @@ def _cascades(schedule, sick_name, date, open_code, open_type, moves, profiles):
         frm = m["from"]
         backfills = _free_candidates(
             schedule, date, frm["code"], frm["shift_type"],
-            exclude={sick_name, m["name"]}, profiles=profiles,
+            exclude={sick_name, m["name"]}, profiles=profiles, stats=stats,
         )
         if not backfills:
             continue
@@ -187,10 +220,11 @@ def _cascades(schedule, sick_name, date, open_code, open_type, moves, profiles):
 
 
 def propose(schedule: dict, name: str, date: str, shift_type: str,
-            offered=frozenset()) -> dict:
+            offered=frozenset(), stats=None) -> dict:
     """Return coverage proposals for the open shift (name, date, shift_type).
 
     `offered` is the set of people who have declared they can cover that date.
+    `stats` (optional) is accumulated work/cover history that makes scoring adaptive.
     """
     open_shift = find_open_shift(schedule, name, date, shift_type)
     open_code = (open_shift or {}).get("code", "") or ""
@@ -198,9 +232,9 @@ def propose(schedule: dict, name: str, date: str, shift_type: str,
 
     profiles = _profiles(schedule)
     exclude = {name}
-    free = _free_candidates(schedule, date, open_code, shift_type, exclude, profiles, offered)
-    moves = _move_candidates(schedule, date, open_code, shift_type, exclude, profiles)
-    cascades = _cascades(schedule, name, date, open_code.upper(), shift_type, moves, profiles)
+    free = _free_candidates(schedule, date, open_code, shift_type, exclude, profiles, offered, stats)
+    moves = _move_candidates(schedule, date, open_code, shift_type, exclude, profiles, stats)
+    cascades = _cascades(schedule, name, date, open_code.upper(), shift_type, moves, profiles, stats)
 
     return {
         "open_shift": {

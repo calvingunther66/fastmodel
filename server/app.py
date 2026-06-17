@@ -22,6 +22,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import config
 from .accounts import AccountStore, has_cap, public_view
+from .audit import AuditLog
 from .coverage import propose as propose_coverage
 from .ical import build_ics
 from .store import ScheduleStore
@@ -36,7 +37,16 @@ app.add_middleware(
 
 store = ScheduleStore()
 accounts = AccountStore()
+audit = AuditLog()
 DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
+
+
+def require_oversight(request: Request) -> dict:
+    """Admins, or members granted manage_users / manage_coverage, may view activity."""
+    user = require_auth(request)
+    if user.get("role") == "admin" or has_cap(user, "manage_users") or has_cap(user, "manage_coverage"):
+        return user
+    raise HTTPException(status_code=403, detail="not permitted")
 
 
 # --------------------------------------------------------------------------
@@ -84,6 +94,7 @@ def login(creds: Credentials, request: Request):
     if not user:
         raise HTTPException(status_code=401, detail="invalid credentials")
     request.session["user"] = user["username"]
+    audit.log(user["username"], "login")
     return {"authenticated": True, "user": public_view(user)}
 
 
@@ -149,6 +160,8 @@ async def upload(
         result = store.ingest(data, sheet_name=sheet)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=f"could not parse: {exc}")
+    audit.log(user["username"], "upload_schedule",
+              {"sheet": result.get("parsed_sheet"), "file": file.filename})
     return {
         "parsed_sheet": result.get("parsed_sheet"),
         "available_sheets": result.get("available_sheets", []),
@@ -181,12 +194,18 @@ def _coverage_target(payload: dict):
 def _propose(name, date, shift_type):
     schedule = store.get_schedule() or {"people": []}
     return propose_coverage(schedule, name, date, shift_type,
-                            offered=store.offers_for_date(date))
+                            offered=store.offers_for_date(date),
+                            stats=store.aggregated_stats())
 
 
 @app.get("/api/coverage/callouts")
 def list_callouts(user: dict = Depends(require_auth)):
     return store.list_callouts()
+
+
+@app.get("/api/coverage/stats")
+def coverage_stats(user: dict = Depends(require_oversight)):
+    return store.aggregated_stats()
 
 
 @app.post("/api/coverage/propose")
@@ -199,6 +218,7 @@ def coverage_sick(payload: dict, user: dict = Depends(require_cap("manage_covera
     name, date, shift_type = _coverage_target(payload)
     store.mark_sick(name, date, shift_type, code=payload.get("code"),
                     reason=payload.get("reason", "out sick"))
+    audit.log(user["username"], "mark_sick", {"name": name, "date": date, "shift": shift_type})
     return _propose(name, date, shift_type)
 
 
@@ -209,6 +229,8 @@ def coverage_assign(payload: dict, user: dict = Depends(require_cap("manage_cove
     if not covered_by:
         raise HTTPException(status_code=400, detail="covered_by is required")
     store.assign_cover(name, date, shift_type, covered_by)
+    audit.log(user["username"], "assign_cover",
+              {"name": name, "date": date, "shift": shift_type, "covered_by": covered_by})
     return {"ok": True, "covered_by": covered_by}
 
 
@@ -221,12 +243,17 @@ def coverage_assign_cascade(payload: dict, user: dict = Depends(require_cap("man
         raise HTTPException(status_code=400, detail="mover, backfill and from are required")
     store.assign_cascade(name, date, shift_type, mover,
                          frm.get("code"), frm["shift_type"], backfill)
+    audit.log(user["username"], "assign_cascade",
+              {"name": name, "date": date, "shift": shift_type,
+               "mover": mover, "backfill": backfill})
     return {"ok": True, "mover": mover, "backfill": backfill}
 
 
 @app.post("/api/coverage/clear")
 def coverage_clear(payload: dict, user: dict = Depends(require_cap("manage_coverage"))):
-    store.clear_callout(*_coverage_target(payload))
+    name, date, shift_type = _coverage_target(payload)
+    store.clear_callout(name, date, shift_type)
+    audit.log(user["username"], "clear_callout", {"name": name, "date": date, "shift": shift_type})
     return {"ok": True}
 
 
@@ -241,6 +268,7 @@ def my_callout(payload: dict, user: dict = Depends(require_auth)):
         raise HTTPException(status_code=400, detail="date and shift_type are required")
     store.mark_sick(person, date, shift_type, code=payload.get("code"),
                     reason="out (self-reported)")
+    audit.log(user["username"], "self_callout", {"person": person, "date": date, "shift": shift_type})
     return {"ok": True}
 
 
@@ -266,6 +294,7 @@ def my_offer(payload: dict, user: dict = Depends(require_auth)):
     if not date:
         raise HTTPException(status_code=400, detail="date is required")
     store.add_offer(person, date, note=payload.get("note", ""))
+    audit.log(user["username"], "offer_cover", {"person": person, "date": date})
     return {"ok": True}
 
 
@@ -286,6 +315,7 @@ def my_contact(payload: dict, user: dict = Depends(require_auth)):
     if not isinstance(contact, list):
         raise HTTPException(status_code=400, detail="contact must be a list of lines")
     store.set_contact(person, contact)
+    audit.log(user["username"], "edit_contact", {"person": person})
     return {"ok": True}
 
 
@@ -316,6 +346,8 @@ def create_user(payload: dict, user: dict = Depends(require_cap("manage_users"))
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    audit.log(user["username"], "user_create",
+              {"username": created["username"], "role": created["role"]})
     return public_view(created)
 
 
@@ -333,6 +365,9 @@ def update_user(username: str, payload: dict, user: dict = Depends(require_cap("
         raise HTTPException(status_code=404, detail="no such user")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    audit.log(user["username"], "user_update",
+              {"username": username, "fields": [k for k in payload if k != "password"],
+               "password_reset": bool(payload.get("password"))})
     return public_view(updated)
 
 
@@ -344,7 +379,16 @@ def delete_user(username: str, user: dict = Depends(require_cap("manage_users"))
         raise HTTPException(status_code=404, detail="no such user")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    audit.log(user["username"], "user_delete", {"username": username})
     return {"ok": True}
+
+
+# --------------------------------------------------------------------------
+# activity log (admins / oversight)
+# --------------------------------------------------------------------------
+@app.get("/api/audit")
+def get_audit(limit: int = 200, user: dict = Depends(require_oversight)):
+    return audit.tail(min(max(limit, 1), 1000))
 
 
 # --------------------------------------------------------------------------

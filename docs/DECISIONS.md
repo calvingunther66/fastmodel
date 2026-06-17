@@ -54,9 +54,24 @@ reasoning, and what's still open. Useful when resuming with no chat history.
   (which boosts them in coverage proposals), edit their own contact info, and view
   the whole team. See `docs/ACCOUNTS.md`.
 - **Everything persists in `DATA_DIR`** (the Docker volume): accounts, schedule,
-  tokens, call-outs, offers, contact edits, and a persisted `secret_key` so logins
-  survive restarts/rebuilds. `docker compose up -d --build` never resets data; only
-  `down -v` deletes the volume. Backup/restore documented in `DOCKER.md`.
+  tokens, call-outs, offers, contact edits, adaptive stats, the activity log, and a
+  persisted `secret_key` so logins survive restarts/rebuilds. `docker compose up -d
+  --build` never resets data; only `down -v` deletes the volume. Backup/restore in
+  `DOCKER.md`.
+
+### Activity log & adaptive scoring
+- **Activity log** (`server/audit.py` → `data/audit.jsonl`): append-only record of
+  logins, uploads, call-outs, assignments, and account changes. Viewable by admins
+  / oversight (`manage_users` or `manage_coverage`) at `/api/audit` and the
+  **Activity** tab.
+- **Adaptive coverage scoring**: the store accumulates per-person history in
+  `data/stats.json` — how much each person works each location/shift (folded from
+  every uploaded schedule, keyed by date-range so re-parsing the same period doesn't
+  double-count) and how often they've **stepped up to cover** (incremented on each
+  assignment). `coverage.propose(..., stats=...)` adds bonuses for working a
+  location regularly and for past cover reliability, with reasons shown. So
+  suggestions improve the more the system is used. The bonuses are additive on top
+  of the static heuristics, so behaviour with no history is unchanged.
 
 ## Open items / future work
 

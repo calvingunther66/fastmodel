@@ -221,3 +221,18 @@ button.ghost.danger { color: var(--red); border-color: #f3c2c2; }
 .offer-list { list-style: none; padding: 0; margin: 6px 0; }
 .offer-list li { display: flex; justify-content: space-between; max-width: 280px; padding: 4px 0; border-bottom: 1px solid var(--line); }
 textarea { width: 100%; max-width: 420px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; font: inherit; }
+
+/* adaptive note + activity log */
+.adaptive-note {
+  background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3;
+  padding: 8px 10px; border-radius: 8px; font-size: 0.82rem; margin: 8px 0;
+}
+.audit-list { list-style: none; padding: 0; margin: 8px 0; }
+.audit-list li {
+  display: grid; grid-template-columns: 170px 90px 150px 1fr; gap: 8px;
+  padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 0.83rem; align-items: baseline;
+}
+.audit-list .a-ts { color: var(--muted); font-variant-numeric: tabular-nums; }
+.audit-list .a-actor { font-weight: 700; }
+.audit-list .a-act { color: var(--accent); }
+.audit-list .a-det { color: var(--ink); }
