@@ -7,7 +7,7 @@
 # BuildKit sets TARGETARCH automatically (arm64 on a 64-bit Pi, amd64 on x86).
 
 # ---- Stage 1: build the web frontend -------------------------------------
-FROM node:20-slim AS web
+FROM node:22-slim AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci

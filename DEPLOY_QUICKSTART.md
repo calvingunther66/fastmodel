@@ -3,7 +3,8 @@
 Copy-paste commands to get the schedule app running. For the *why* and for
 HTTPS/systemd, see [`SERVER.md`](SERVER.md).
 
-Assumes Raspberry Pi OS (or any Debian/Ubuntu), Python 3.10+, and Node 18+.
+Assumes Raspberry Pi OS (or any Debian/Ubuntu), Python 3.10+, and Node 22+
+(Vite 8 needs Node 20.19+/22+).
 
 ## 0. Install prerequisites (once)
 
@@ -127,4 +128,4 @@ sudo systemctl restart schedule       # if using systemd
 | Login fails after restart | Set a **fixed** `SECRET_KEY` (random default changes each start). |
 | Calendar won't subscribe on iPhone/Google | You need HTTPS (step 5) and `PUBLIC_BASE_URL` set to the https URL. |
 | Upload picks the wrong tab | Use the sheet dropdown on the **Upload** screen to select the canonical tab. |
-| `npm`/`node` too old | `sudo npm install -g n && sudo n lts` (or install Node 18+ from NodeSource). |
+| `npm`/`node` too old (Vite 8 needs Node 22) | `sudo npm install -g n && sudo n 22` (or install Node 22 from NodeSource). |

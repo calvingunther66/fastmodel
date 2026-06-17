@@ -31,7 +31,7 @@ Browser ──▶  FastAPI (server/)         ──▶  schedule_extractor (Exce
 # 1. Python deps (core parser + server)
 pip install -r requirements.txt -r server/requirements.txt
 
-# 2. Build the React frontend (needs Node 18+)
+# 2. Build the React frontend (needs Node 22+; Vite 8)
 cd web && npm install && npm run build && cd ..
 ```
 
