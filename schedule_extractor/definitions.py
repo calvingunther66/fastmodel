@@ -25,12 +25,14 @@ LOCATIONS = {
     "NTAS": "NTAS",          # night code (full name unconfirmed)
 }
 
-# Status / time-off markers (not a worked location).
+# Status / availability markers (not a specific worked location).
 STATUS = {
     "V": "Vacation",
     "R": "Request (requested day)",
     "BDay": "Birthday request (off)",
     "no": "Unavailable / out sick",
+    "H": "Holiday",
+    "A": "Available / on-call pool",
 }
 
 # Fixed shift windows we can state confidently. (start, end, crosses_midnight)
