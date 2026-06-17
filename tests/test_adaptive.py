@@ -39,19 +39,23 @@ def _sched():
     }
 
 
-def test_step_ups_raise_score(tmp_path):
+def test_fairness_balances_load(tmp_path):
     s = _store(tmp_path)
     base = propose(_sched(), "SICK", "2026-06-01", "night", stats=s.aggregated_stats())
     before = {c["name"]: c["score"] for c in base["free_candidates"]}
     assert before["ANNA"] == before["BECK"]  # identical to start
 
-    for _ in range(2):
+    # ANNA keeps stepping up; the model should now favour BECK (share the load).
+    for _ in range(3):
         s._bump_cover("ANNA", "BC", "night")
     learned = propose(_sched(), "SICK", "2026-06-01", "night", stats=s.aggregated_stats())
     after = {c["name"]: c for c in learned["free_candidates"]}
-    assert after["ANNA"]["score"] > before["ANNA"]          # reliability lifted ANNA
-    assert any("stepped up" in r for r in after["ANNA"]["reasons"])
-    assert after["ANNA"]["score"] > after["BECK"]["score"]
+    assert after["BECK"]["score"] > after["ANNA"]["score"]      # fairness lifts the under-coverer
+    assert after["ANNA"]["score"] < before["ANNA"]              # over-coverer eased off
+    assert any("easing their load" in r for r in after["ANNA"]["reasons"])
+    assert learned["free_candidates"][0]["name"] == "BECK"      # BECK now recommended first
+    # every recommendation carries a plain-English explanation
+    assert all(c.get("explanation") for c in learned["free_candidates"])
 
 
 def test_work_frequency_recorded_once_per_period(tmp_path):
@@ -61,6 +65,21 @@ def test_work_frequency_recorded_once_per_period(tmp_path):
     agg = s.aggregated_stats()
     assert agg["periods"] == 1
     assert agg["work"]["SICK"]["by_code"]["BC"] == 1
+
+
+def test_leaderboard_ranks_by_covers(tmp_path):
+    s = _store(tmp_path)
+    s._record_work(_sched())
+    for _ in range(3):
+        s._bump_cover("ANNA", "BC", "night")
+    s._bump_cover("BECK", "BC", "night")
+    board = s.leaderboard()
+    names = [r["name"] for r in board["people"]]
+    assert names[0] == "ANNA" and names[1] == "BECK"   # ranked by covers desc
+    top = board["people"][0]
+    assert top["covers"] == 3 and top["covers_by_type"]["night"] == 3
+    # everyone on the schedule appears, even with zero history
+    assert "SICK" in names
 
 
 def test_audit_log_roundtrip(tmp_path):

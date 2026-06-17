@@ -179,6 +179,7 @@ function CandidateList({ rows, busy, onAssign, empty }) {
           <div className="cand-main">
             <span className="cand-name">{c.name}</span>
             {c.contact?.length > 0 && <span className="cand-contact">{c.contact[0]}</span>}
+            {c.explanation && <span className="cand-why">{c.explanation}</span>}
             <span className="cand-reasons">{c.reasons.join("; ")}</span>
           </div>
           <button disabled={busy} onClick={() => onAssign(c.name)}>Assign</button>

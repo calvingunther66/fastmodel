@@ -182,7 +182,18 @@ button.ghost.small { padding: 2px 8px; font-size: 0.78rem; }
 .cand-main { display: flex; flex-direction: column; gap: 1px; }
 .cand-name { font-weight: 700; }
 .cand-contact { font-size: 0.78rem; color: var(--muted); }
-.cand-reasons { font-size: 0.8rem; color: var(--ink); }
+.cand-why { font-size: 0.83rem; color: #1e3a8a; }
+.cand-reasons { font-size: 0.74rem; color: var(--muted); }
+
+/* leaderboard / insights */
+.board { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.board th, .board td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.board .rank { color: var(--muted); width: 28px; }
+.board-name { font-weight: 700; white-space: nowrap; }
+.board .mix { color: var(--muted); font-variant-numeric: tabular-nums; }
+.bar-wrap { position: relative; display: flex; align-items: center; gap: 6px; min-width: 120px; }
+.bar { height: 12px; background: var(--accent); border-radius: 3px; min-width: 2px; }
+.bar-num { font-weight: 700; font-variant-numeric: tabular-nums; }
 .callout-list li {
   display: grid;
   grid-template-columns: 1fr 1fr 1.4fr auto;

@@ -48,6 +48,7 @@ export const api = {
 
   audit: (limit = 200) => req(`/api/audit?limit=${limit}`),
   coverageStats: () => req("/api/coverage/stats"),
+  leaderboard: () => req("/api/coverage/leaderboard"),
 
   callouts: () => req("/api/coverage/callouts"),
   sick: (name, date, shift_type) =>

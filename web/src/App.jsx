@@ -7,6 +7,7 @@ import MyAvailability from "./components/MyAvailability.jsx";
 import Coverage from "./components/Coverage.jsx";
 import Admin from "./components/Admin.jsx";
 import Users from "./components/Users.jsx";
+import Insights from "./components/Insights.jsx";
 import Activity from "./components/Activity.jsx";
 
 export default function App() {
@@ -42,6 +43,7 @@ export default function App() {
     { id: "coverage", label: "Coverage", show: can("manage_coverage") },
     { id: "admin", label: "Upload", show: can("upload") },
     { id: "users", label: "Users", show: can("manage_users") },
+    { id: "insights", label: "Insights", show: can("manage_users") || can("manage_coverage") },
     { id: "activity", label: "Activity", show: can("manage_users") || can("manage_coverage") },
   ].filter((t) => t.show);
 
@@ -85,6 +87,7 @@ export default function App() {
           <Coverage schedule={schedule} onChange={loadSchedule} />}
         {activeTab === "admin" && <Admin schedule={schedule} onChange={loadSchedule} />}
         {activeTab === "users" && <Users schedule={schedule} />}
+        {activeTab === "insights" && <Insights />}
         {activeTab === "activity" && <Activity />}
       </main>
     </div>

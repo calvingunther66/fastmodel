@@ -64,7 +64,7 @@ server/                    FastAPI app (serves API + built React app)
 web/                       React + Vite frontend (built to web/dist)
   src/App.jsx              shell: login + role-aware tabs
   src/components/          Login, ScheduleGrid, MyCalendar, MyAvailability,
-                             Coverage, Admin (upload), Users (accounts), Activity (log)
+                             Coverage, Admin (upload), Users, Insights, Activity
   src/api.js, utils.js     fetch wrapper, date/colour helpers
 
 tests/                     pytest (10 tests) — run with `python -m pytest`

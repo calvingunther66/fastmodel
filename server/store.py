@@ -208,6 +208,29 @@ class ScheduleStore:
             "periods": len(stats.get("work_by_period", {})),
         }
 
+    def leaderboard(self) -> dict:
+        """Per-person insights ranked by who has stepped up to cover the most."""
+        agg = self.aggregated_stats()
+        covers, work = agg["covers"], agg["work"]
+        names = set(covers) | set(work)
+        # Include everyone currently on the schedule, even with zero history.
+        sched = self.get_raw_schedule() or {}
+        names |= {p["name"] for p in sched.get("people", []) if p.get("name")}
+        rows = []
+        for n in sorted(names):
+            c = covers.get(n, {})
+            w = work.get(n, {})
+            rows.append({
+                "name": n,
+                "covers": c.get("count", 0),
+                "covers_by_type": c.get("by_type", {}),
+                "covers_by_code": c.get("by_code", {}),
+                "worked_total": w.get("total", 0),
+                "worked_by_code": w.get("by_code", {}),
+            })
+        rows.sort(key=lambda r: (-r["covers"], -r["worked_total"], r["name"]))
+        return {"periods": agg["periods"], "people": rows}
+
     # ---- call-out overrides ----------------------------------------------
     def _callouts(self) -> list[dict]:
         return self._read_json(self.overrides_path, {}).get("callouts", [])

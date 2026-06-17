@@ -208,6 +208,11 @@ def coverage_stats(user: dict = Depends(require_oversight)):
     return store.aggregated_stats()
 
 
+@app.get("/api/coverage/leaderboard")
+def coverage_leaderboard(user: dict = Depends(require_oversight)):
+    return store.leaderboard()
+
+
 @app.post("/api/coverage/propose")
 def coverage_propose(payload: dict, user: dict = Depends(require_cap("manage_coverage"))):
     return _propose(*_coverage_target(payload))

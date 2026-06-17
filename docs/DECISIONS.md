@@ -68,10 +68,18 @@ reasoning, and what's still open. Useful when resuming with no chat history.
   `data/stats.json` — how much each person works each location/shift (folded from
   every uploaded schedule, keyed by date-range so re-parsing the same period doesn't
   double-count) and how often they've **stepped up to cover** (incremented on each
-  assignment). `coverage.propose(..., stats=...)` adds bonuses for working a
-  location regularly and for past cover reliability, with reasons shown. So
-  suggestions improve the more the system is used. The bonuses are additive on top
-  of the static heuristics, so behaviour with no history is unchanged.
+  assignment). `coverage.propose(..., stats=...)` folds in two signals:
+  - **competence** (works this location/shift often) → small positive (familiarity);
+  - **fairness / load-balancing** → the cover count is compared to the team average;
+    people who've covered a lot get **eased off** and those who rarely cover get a
+    **turn**. This deliberately spreads the load so the willing few don't burn out
+    (a refinement of the original "reward reliability" idea, at the owner's request).
+  Each candidate carries a plain-English `explanation` plus detailed `reasons`.
+  Bonuses are additive on top of the static heuristics; with no history, behaviour
+  is unchanged.
+- **Step-up dashboard** (`/api/coverage/leaderboard`, **Insights** tab): ranks who
+  covers the most, with per-person cover/work breakdowns. Visible to oversight. It
+  celebrates the reliable folks while the recommender gives others the next turn.
 
 ## Open items / future work
 
