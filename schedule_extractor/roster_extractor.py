@@ -170,16 +170,24 @@ def extract_roster(ws, *, default_year: int = 2026,
                     # free-text note column to the right of the calendar
                     notes.append({"date": None, "text": text})
 
-        # A date is "split" when both the day row and the mid row carry a code,
-        # OR the box's center bar (the mid row of that date) is coloured in.
+        # A date's day shift is "split" (morning vs afternoon) when its box has a
+        # coloured center bar, or both the day and mid rows carry a code. This
+        # only applies to a *worked location* on the day row — a green vacation
+        # fill spanning the middle row must not be mistaken for a split.
         mid_row = block_rows[1] if len(block_rows) > 1 else None
         offsets_by_date: dict[str, set[int]] = {}
         cols_by_date: dict[str, int] = {}
-        for date, offset, _code, cell in records:
+        day_code_by_date: dict[str, str] = {}
+        for date, offset, code, cell in records:
             offsets_by_date.setdefault(date, set()).add(offset)
             cols_by_date[date] = cell.column
+            if offset == 0:
+                day_code_by_date[date] = code
         split_dates = set()
         for date, offs in offsets_by_date.items():
+            day_code = day_code_by_date.get(date)
+            if not day_code or decode(day_code)["category"] != "location":
+                continue  # split only makes sense for a worked location
             center_coloured = (
                 mid_row is not None
                 and has_solid_fill(ws.cell(mid_row, cols_by_date[date]))

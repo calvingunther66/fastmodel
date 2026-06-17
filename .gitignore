@@ -8,3 +8,10 @@ extracted_images/
 out.json
 # Real, PII-containing schedules and their derived outputs — never commit
 real_samples/
+
+# Web app
+web/node_modules/
+web/dist/
+
+# Server runtime state (uploaded workbooks, parsed json, calendar tokens)
+data/
