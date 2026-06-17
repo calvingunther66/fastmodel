@@ -48,7 +48,8 @@ schedule_extractor/        Python parser
 
 server/                    FastAPI app (serves API + built React app)
   app.py                   routes: /api/*, public /calendar/<token>.ics, SPA
-  store.py                 ScheduleStore: upload/parse/persist + stable tokens
+  store.py                 ScheduleStore: upload/parse/persist + tokens + call-outs
+  coverage.py              trial: cover-suggestion engine + call-out overrides
   ical.py                  build_ics(): shifts -> VCALENDAR
   config.py                env-var configuration
   __main__.py              `python -m server` (uvicorn)
@@ -56,7 +57,7 @@ server/                    FastAPI app (serves API + built React app)
 
 web/                       React + Vite frontend (built to web/dist)
   src/App.jsx              shell: login gate + tabs
-  src/components/          Login, ScheduleGrid, MyCalendar, Admin
+  src/components/          Login, ScheduleGrid, MyCalendar, Coverage, Admin
   src/api.js, utils.js     fetch wrapper, date/colour helpers
 
 tests/                     pytest (10 tests) — run with `python -m pytest`

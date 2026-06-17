@@ -149,3 +149,49 @@ table.grid { border-collapse: collapse; font-size: 0.8rem; }
 }
 .status { margin-top: 12px; color: var(--green); }
 .row { display: flex; gap: 8px; align-items: center; }
+
+/* Coverage (trial) */
+.trial {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #fde68a;
+  color: #92400e;
+  padding: 1px 6px;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+button.ghost {
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+button.ghost.small { padding: 2px 8px; font-size: 0.78rem; }
+.shift-pick { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; align-items: flex-start; }
+.proposal { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 10px; }
+.proposal h4 { margin: 12px 0 4px; }
+.cand-list, .callout-list { list-style: none; padding: 0; margin: 4px 0; }
+.cand-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.cand-main { display: flex; flex-direction: column; gap: 1px; }
+.cand-name { font-weight: 700; }
+.cand-contact { font-size: 0.78rem; color: var(--muted); }
+.cand-reasons { font-size: 0.8rem; color: var(--ink); }
+.callout-list li {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.4fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.callout-list .who { font-weight: 700; }
+.callout-list .when { color: var(--muted); font-size: 0.85rem; }
+.callout-list .open { color: var(--red); font-weight: 600; }
+.callout-list .covered { color: var(--green); font-weight: 600; }

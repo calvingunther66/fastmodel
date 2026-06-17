@@ -58,9 +58,17 @@ reasoning, and what's still open. Useful when resuming with no chat history.
 - **Auto-sheet picker** can select a draft tab on upload; the owner should pick the
   canonical tab from the Upload dropdown. Could persist the chosen sheet, or prefer
   tabs without `KH-/NEW-/OLD-` prefixes.
-- **Not built:** "who can cover this called-out shift?" view (list people who are
-  free that day — on `A`/`OK`, not already working, not on `V`/`H`/`no`); CSV export;
-  pushing events directly into Google Calendar.
+- **Coverage engine (trial, built):** the **Coverage** tab lets an admin mark a
+  shift out sick; it flags the shift open, proposes **free** covers (Available
+  pool / unscheduled, ranked by qualification + night experience) and **move**
+  candidates (people working something reassignable who are qualified), and lets
+  the admin **assign** a cover — which injects the shift into that person's grid
+  row and live `.ics` feed ("covering for X"). It is a **heuristic** (the workbook
+  has no explicit qualifications; "qualified" = has worked that location before).
+  Lives in `server/coverage.py` + `web/src/components/Coverage.jsx`; overrides are
+  stored in `data/overrides.json`. Possible next steps: cascading multi-move
+  proposals, honouring the `R`/note availability hints, and an "undo assign".
+- **Not built:** CSV export; pushing events directly into Google Calendar.
 - **HTTPS is required** for Apple/Google calendar subscriptions — see `SERVER.md`
   (Caddy snippet). Remember to set `PUBLIC_BASE_URL` to the https domain so the
   generated `.ics` links are correct.

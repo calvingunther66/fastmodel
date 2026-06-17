@@ -3,6 +3,7 @@ import { api } from "./api.js";
 import Login from "./components/Login.jsx";
 import ScheduleGrid from "./components/ScheduleGrid.jsx";
 import MyCalendar from "./components/MyCalendar.jsx";
+import Coverage from "./components/Coverage.jsx";
 import Admin from "./components/Admin.jsx";
 
 export default function App() {
@@ -38,6 +39,9 @@ export default function App() {
           <button className={tab === "calendar" ? "on" : ""} onClick={() => setTab("calendar")}>
             My calendar
           </button>
+          <button className={tab === "coverage" ? "on" : ""} onClick={() => setTab("coverage")}>
+            Coverage
+          </button>
           <button className={tab === "admin" ? "on" : ""} onClick={() => setTab("admin")}>
             Upload
           </button>
@@ -68,6 +72,7 @@ export default function App() {
         )}
         {tab === "schedule" && !empty && <ScheduleGrid schedule={schedule} />}
         {tab === "calendar" && !empty && <MyCalendar schedule={schedule} />}
+        {tab === "coverage" && !empty && <Coverage schedule={schedule} onChange={loadSchedule} />}
         {tab === "admin" && <Admin schedule={schedule} onChange={loadSchedule} />}
       </main>
     </div>

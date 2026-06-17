@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import config
+from .coverage import propose as propose_coverage
 from .ical import build_ics
 from .store import ScheduleStore
 
@@ -116,6 +117,54 @@ def reparse(payload: dict, request: Request, _: None = Depends(require_auth)):
     except FileNotFoundError:
         raise HTTPException(status_code=400, detail="no workbook uploaded yet")
     return {"parsed_sheet": result.get("parsed_sheet")}
+
+
+# --------------------------------------------------------------------------
+# coverage (trial): mark a shift sick and get cover proposals
+# --------------------------------------------------------------------------
+def _coverage_target(payload: dict):
+    name, date, shift_type = payload.get("name"), payload.get("date"), payload.get("shift_type")
+    if not (name and date and shift_type):
+        raise HTTPException(status_code=400, detail="name, date and shift_type are required")
+    return name, date, shift_type
+
+
+@app.get("/api/coverage/callouts")
+def list_callouts(request: Request, _: None = Depends(require_auth)):
+    return store.list_callouts()
+
+
+@app.post("/api/coverage/propose")
+def coverage_propose(payload: dict, request: Request, _: None = Depends(require_auth)):
+    name, date, shift_type = _coverage_target(payload)
+    schedule = store.get_schedule() or {"people": []}
+    return propose_coverage(schedule, name, date, shift_type)
+
+
+@app.post("/api/coverage/sick")
+def coverage_sick(payload: dict, request: Request, _: None = Depends(require_auth)):
+    name, date, shift_type = _coverage_target(payload)
+    store.mark_sick(name, date, shift_type, code=payload.get("code"),
+                    reason=payload.get("reason", "out sick"))
+    schedule = store.get_schedule() or {"people": []}
+    return propose_coverage(schedule, name, date, shift_type)
+
+
+@app.post("/api/coverage/assign")
+def coverage_assign(payload: dict, request: Request, _: None = Depends(require_auth)):
+    name, date, shift_type = _coverage_target(payload)
+    covered_by = payload.get("covered_by")
+    if not covered_by:
+        raise HTTPException(status_code=400, detail="covered_by is required")
+    store.assign_cover(name, date, shift_type, covered_by)
+    return {"ok": True, "covered_by": covered_by}
+
+
+@app.post("/api/coverage/clear")
+def coverage_clear(payload: dict, request: Request, _: None = Depends(require_auth)):
+    name, date, shift_type = _coverage_target(payload)
+    store.clear_callout(name, date, shift_type)
+    return {"ok": True}
 
 
 def _ics_base(request: Request) -> str:

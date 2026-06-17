@@ -26,6 +26,16 @@ export const api = {
   people: () => req("/api/people"),
   reparse: (sheet) =>
     req("/api/schedule/reparse", { method: "POST", body: JSON.stringify({ sheet }) }),
+  callouts: () => req("/api/coverage/callouts"),
+  sick: (name, date, shift_type) =>
+    req("/api/coverage/sick", { method: "POST", body: JSON.stringify({ name, date, shift_type }) }),
+  assign: (name, date, shift_type, covered_by) =>
+    req("/api/coverage/assign", {
+      method: "POST",
+      body: JSON.stringify({ name, date, shift_type, covered_by }),
+    }),
+  clearCallout: (name, date, shift_type) =>
+    req("/api/coverage/clear", { method: "POST", body: JSON.stringify({ name, date, shift_type }) }),
   async upload(file) {
     const fd = new FormData();
     fd.append("file", file);

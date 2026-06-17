@@ -59,7 +59,12 @@ def build_ics(person_name: str, shifts: list[dict], tz_name: str) -> bytes:
             ev.add("dtend", day + dt.timedelta(days=1))
             ev.add("summary", label)
 
+        if s.get("covering_for"):
+            ev["summary"] = f"{label} ({shift_type}) — covering for {s['covering_for']}"
+
         desc = []
+        if s.get("covering_for"):
+            desc.append(f"Covering for {s['covering_for']}")
         if s.get("available") is False:
             desc.append("⚠ Marked unavailable / called out — needs coverage")
         if s.get("approved") is True:

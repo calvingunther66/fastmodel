@@ -22,6 +22,7 @@ import openpyxl
 from schedule_extractor.roster_extractor import extract_roster
 
 from .config import DATA_DIR
+from .coverage import apply_overrides
 
 
 class ScheduleStore:
@@ -30,6 +31,7 @@ class ScheduleStore:
         self.xlsx_path = data_dir / "current.xlsx"
         self.schedule_path = data_dir / "schedule.json"
         self.tokens_path = data_dir / "tokens.json"
+        self.overrides_path = data_dir / "overrides.json"
         self._lock = threading.Lock()
 
     # ---- low-level json helpers ------------------------------------------
@@ -87,8 +89,62 @@ class ScheduleStore:
             self._ensure_tokens(result)
             return result
 
-    def get_schedule(self) -> dict | None:
+    def get_raw_schedule(self) -> dict | None:
+        """The parsed schedule as stored, without call-out overrides applied."""
         return self._read_json(self.schedule_path, None)
+
+    def get_schedule(self) -> dict | None:
+        """The schedule with call-outs flagged and assigned covers injected."""
+        base = self._read_json(self.schedule_path, None)
+        if base is None:
+            return None
+        callouts = self._callouts()
+        return apply_overrides(base, callouts) if callouts else base
+
+    # ---- call-out overrides ----------------------------------------------
+    def _callouts(self) -> list[dict]:
+        return self._read_json(self.overrides_path, {}).get("callouts", [])
+
+    def _save_callouts(self, callouts: list[dict]) -> None:
+        self._write_json(self.overrides_path, {"callouts": callouts})
+
+    @staticmethod
+    def _same(co: dict, name: str, date: str, shift_type: str) -> bool:
+        return co["name"] == name and co["date"] == date and co["shift_type"] == shift_type
+
+    def list_callouts(self) -> list[dict]:
+        return self._callouts()
+
+    def mark_sick(self, name: str, date: str, shift_type: str, code: str | None = None,
+                  reason: str = "out sick") -> None:
+        with self._lock:
+            callouts = self._callouts()
+            if not any(self._same(c, name, date, shift_type) for c in callouts):
+                callouts.append({
+                    "name": name, "date": date, "shift_type": shift_type,
+                    "code": code, "reason": reason, "covered_by": None,
+                })
+                self._save_callouts(callouts)
+
+    def assign_cover(self, name: str, date: str, shift_type: str, covered_by: str) -> None:
+        with self._lock:
+            callouts = self._callouts()
+            for c in callouts:
+                if self._same(c, name, date, shift_type):
+                    c["covered_by"] = covered_by
+                    break
+            else:
+                callouts.append({
+                    "name": name, "date": date, "shift_type": shift_type,
+                    "code": None, "reason": "out sick", "covered_by": covered_by,
+                })
+            self._save_callouts(callouts)
+
+    def clear_callout(self, name: str, date: str, shift_type: str) -> None:
+        with self._lock:
+            callouts = [c for c in self._callouts()
+                        if not self._same(c, name, date, shift_type)]
+            self._save_callouts(callouts)
 
     def _tokens(self) -> dict:
         return self._read_json(self.tokens_path, {})
