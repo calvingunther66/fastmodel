@@ -6,6 +6,7 @@ import MyCalendar from "./components/MyCalendar.jsx";
 import MyAvailability from "./components/MyAvailability.jsx";
 import Coverage from "./components/Coverage.jsx";
 import Admin from "./components/Admin.jsx";
+import Create from "./components/Create.jsx";
 import Users from "./components/Users.jsx";
 import Insights from "./components/Insights.jsx";
 import Activity from "./components/Activity.jsx";
@@ -42,6 +43,7 @@ export default function App() {
     { id: "availability", label: "My availability", show: !!user?.person },
     { id: "coverage", label: "Coverage", show: can("manage_coverage") },
     { id: "admin", label: "Upload", show: can("upload") },
+    { id: "create", label: "Create", show: can("upload") },
     { id: "users", label: "Users", show: can("manage_users") },
     { id: "insights", label: "Insights", show: can("view_leaderboard") || can("tune_scoring") },
     { id: "activity", label: "Activity", show: can("manage_users") || can("manage_coverage") },
@@ -76,8 +78,10 @@ export default function App() {
       )}
 
       <main>
-        {empty && activeTab !== "admin" && activeTab !== "users" && (
-          <p className="muted">No schedule loaded yet{can("upload") ? " — go to “Upload”." : "."}</p>
+        {empty && !["admin", "create", "users"].includes(activeTab) && (
+          <p className="muted">
+            No schedule loaded yet{can("upload") ? " — go to “Upload” or “Create”." : "."}
+          </p>
         )}
         {activeTab === "schedule" && !empty && <ScheduleGrid schedule={schedule} />}
         {activeTab === "calendar" && !empty && <MyCalendar schedule={schedule} user={user} />}
@@ -86,6 +90,7 @@ export default function App() {
         {activeTab === "coverage" && !empty &&
           <Coverage schedule={schedule} onChange={loadSchedule} />}
         {activeTab === "admin" && <Admin schedule={schedule} onChange={loadSchedule} />}
+        {activeTab === "create" && <Create onChange={loadSchedule} />}
         {activeTab === "users" && <Users schedule={schedule} />}
         {activeTab === "insights" && <Insights can={can} />}
         {activeTab === "activity" && <Activity />}

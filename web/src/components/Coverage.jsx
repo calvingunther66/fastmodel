@@ -10,6 +10,7 @@ export default function Coverage({ schedule, onChange }) {
   const [callouts, setCallouts] = useState([]);
   const [busy, setBusy] = useState(false);
   const [stats, setStats] = useState(null);
+  const [weight, setWeight] = useState(null);
 
   const person = people.find((p) => p.name === name);
   // Only real worked assignments make sense to call out.
@@ -21,7 +22,13 @@ export default function Coverage({ schedule, onChange }) {
   useEffect(() => {
     refreshCallouts();
     api.coverageStats().then(setStats).catch(() => setStats(null));
+    api.coverageSettings().then((s) => setWeight(s.fairness_weight)).catch(() => setWeight(null));
   }, [schedule]);
+
+  const leaning = weight == null ? "" :
+    weight <= 0.34 ? `leaning toward competence (${Math.round(weight * 100)}% fairness)`
+    : weight >= 0.66 ? `leaning toward fairness (${Math.round(weight * 100)}% fairness)`
+    : `balanced (${Math.round(weight * 100)}% fairness)`;
 
   const totalCovers = stats
     ? Object.values(stats.covers || {}).reduce((a, c) => a + (c.count || 0), 0)
@@ -88,8 +95,9 @@ export default function Coverage({ schedule, onChange }) {
         <p className="adaptive-note">
           🧠 Ranking adapts from history: learned from {stats.periods} schedule
           period{stats.periods === 1 ? "" : "s"} and {totalCovers} past cover
-          {totalCovers === 1 ? "" : "s"}. People who work a shift often and step up
-          to cover rank higher.
+          {totalCovers === 1 ? "" : "s"}. The dial balances who knows the role
+          against sharing the load.
+          {leaning && <><br />Recommender dial: <strong>{leaning}</strong>.</>}
         </p>
       )}
 

@@ -201,6 +201,21 @@ button.ghost.small { padding: 2px 8px; font-size: 0.78rem; }
 .slider-row { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; color: var(--muted); }
 .slider-row input[type=range] { flex: 1; max-width: 320px; }
 .slider-val { font-weight: 700; color: var(--ink); min-width: 80px; }
+
+/* schedule builder */
+.create-head { display: flex; gap: 14px; flex-wrap: wrap; margin: 10px 0; }
+.create-head label { font-size: 0.8rem; }
+.level-pick { display: flex; align-items: center; gap: 6px; margin: 8px 0 12px; font-size: 0.85rem; }
+.level-pick button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.staff-name { font-weight: 700; font-size: 0.82rem; white-space: nowrap; }
+.staff-tags { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 2px; }
+.tag { font-size: 0.6rem; background: #eef2ff; color: #3730a3; padding: 0 5px; border-radius: 4px; }
+.tag.warn { background: #fee2e2; color: #991b1b; }
+.tag.muted-tag { background: #f1f5f9; color: var(--muted); }
+.cell-codes { display: flex; gap: 2px; justify-content: center; min-height: 14px; }
+.cell-select { width: 100%; border: none; background: transparent; font-size: 0.72rem; color: var(--muted); padding: 0; }
+td.cell-block { background: #f8fafc; }
+td.cell-block .cell-select { color: #cbd5e1; }
 .callout-list li {
   display: grid;
   grid-template-columns: 1fr 1fr 1.4fr auto;

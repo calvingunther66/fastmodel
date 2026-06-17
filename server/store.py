@@ -19,10 +19,13 @@ from pathlib import Path
 
 import openpyxl
 
+from schedule_extractor.definitions import decode, shift_window
 from schedule_extractor.roster_extractor import extract_roster
 
 from .config import DATA_DIR
 from .coverage import apply_overrides, find_open_shift
+
+_LEVEL_TO_TYPE = {"day": "day", "mid": "midshift", "night": "night"}
 
 
 class ScheduleStore:
@@ -90,6 +93,48 @@ class ScheduleStore:
             if not self.xlsx_path.exists():
                 raise FileNotFoundError("no workbook uploaded yet")
             result = self._parse(sheet_name)
+            self._write_json(self.schedule_path, result)
+            self._ensure_tokens(result)
+            self._record_work(result)
+            return result
+
+    def create_schedule(self, title: str, start: str, end: str,
+                        assignments: dict, contacts: dict | None = None) -> dict:
+        """Build a schedule dict from in-app assignments (no .xlsx) and store it.
+
+        `assignments` is {person: {date: {level: code}}} where level is
+        day|mid|night. Codes are decoded to meaning + times via definitions, so a
+        created schedule is identical in shape to a parsed one.
+        """
+        with self._lock:
+            people = []
+            for name, days in (assignments or {}).items():
+                shifts = []
+                for date, levels in (days or {}).items():
+                    for level, code in (levels or {}).items():
+                        code = (code or "").strip()
+                        if not code:
+                            continue
+                        st = _LEVEL_TO_TYPE.get(level, "day")
+                        info = decode(code)
+                        s_t, e_t, cross = shift_window(code, st)
+                        shifts.append({
+                            "date": date, "code": code, "shift_type": st,
+                            "category": info["category"], "meaning": info["meaning"],
+                            "start": s_t, "end": e_t, "crosses_midnight": cross,
+                            "available": True,
+                        })
+                shifts.sort(key=lambda s: (s["date"], s["shift_type"]))
+                people.append({
+                    "name": name, "contact": (contacts or {}).get(name, []),
+                    "shifts": shifts, "unavailable": [], "notes": [],
+                })
+            result = {
+                "sheet": title, "parsed_sheet": title, "available_sheets": [title],
+                "date_range": {"start": start, "end": end},
+                "uploaded_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                "created": True, "people": people, "warnings": [],
+            }
             self._write_json(self.schedule_path, result)
             self._ensure_tokens(result)
             self._record_work(result)

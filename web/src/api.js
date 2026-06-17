@@ -71,6 +71,11 @@ export const api = {
     }),
   clearCallout: (name, date, shift_type) =>
     req("/api/coverage/clear", { method: "POST", body: JSON.stringify({ name, date, shift_type }) }),
+  roster: () => req("/api/roster"),
+  codes: () => req("/api/codes"),
+  createSchedule: (body) =>
+    req("/api/schedule/create", { method: "POST", body: JSON.stringify(body) }),
+
   async upload(file) {
     const fd = new FormData();
     fd.append("file", file);

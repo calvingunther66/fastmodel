@@ -87,6 +87,20 @@ reasoning, and what's still open. Useful when resuming with no chat history.
   and the dial can be handed out separately: `view_leaderboard` (see the dashboard)
   and `tune_scoring` (move the dial). Both are admin-implicit.
 
+### Schedule creation (preview) & staff roster
+- **In-app schedule builder** (`/api/schedule/create`, **Create** tab, `upload`
+  cap): build a schedule without an `.xlsx` — pick a period, then set day/mid/night
+  codes per person on a grid. `store.create_schedule()` decodes codes to
+  meaning+times via `definitions`, so a created schedule is identical in shape to a
+  parsed one and becomes the active schedule (feeding tokens, stats, coverage).
+- **Staff roster** (`server/roster.py` → `data/roster.json`): the master list of
+  people and attributes — clinics qualified, career/per-diem, seniority,
+  works_nights. **Currently placeholder data** (`placeholder: true`). The owner will
+  send the real roster; `replace()` / a future `/api/roster` POST swaps it in.
+  Intended next uses: validate assignments (e.g. block nights for no-nights staff —
+  the grid already greys those cells), drive "qualified for X" in coverage from real
+  quals instead of inferred history, and respect seniority/per-diem rules.
+
 ## Open items / future work
 
 - **Clinic split (morning/afternoon)** detection via a coloured center bar is

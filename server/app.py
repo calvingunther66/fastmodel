@@ -25,6 +25,7 @@ from .accounts import AccountStore, has_cap, public_view
 from .audit import AuditLog
 from .coverage import propose as propose_coverage
 from .ical import build_ics
+from .roster import StaffRoster
 from .store import ScheduleStore
 
 app = FastAPI(title="fastmodel schedule")
@@ -38,6 +39,7 @@ app.add_middleware(
 store = ScheduleStore()
 accounts = AccountStore()
 audit = AuditLog()
+roster = StaffRoster()
 DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 
 
@@ -167,6 +169,30 @@ async def upload(
         "available_sheets": result.get("available_sheets", []),
         "people": len([p for p in result.get("people", []) if p.get("name")]),
     }
+
+
+@app.get("/api/roster")
+def get_roster(user: dict = Depends(require_auth)):
+    return {"staff": roster.list(), "placeholder": roster.is_placeholder()}
+
+
+@app.get("/api/codes")
+def get_codes(user: dict = Depends(require_auth)):
+    from schedule_extractor.definitions import CLINICS, LOCATIONS, STATUS
+    return {"locations": LOCATIONS, "statuses": STATUS, "clinics": sorted(CLINICS)}
+
+
+@app.post("/api/schedule/create")
+def create_schedule(payload: dict, user: dict = Depends(require_cap("upload"))):
+    title = (payload.get("title") or "New schedule").strip()
+    start, end = payload.get("start"), payload.get("end")
+    if not (start and end):
+        raise HTTPException(status_code=400, detail="start and end dates are required")
+    result = store.create_schedule(title, start, end, payload.get("assignments") or {})
+    audit.log(user["username"], "create_schedule",
+              {"title": title, "people": len([p for p in result["people"] if p["shifts"]])})
+    return {"title": title,
+            "people": len([p for p in result["people"] if p["shifts"]])}
 
 
 @app.post("/api/schedule/reparse")

@@ -52,6 +52,7 @@ schedule_extractor/        Python parser
 server/                    FastAPI app (serves API + built React app)
   app.py                   routes: auth, /api/*, self-service, /calendar/<token>.ics, SPA
   accounts.py              AccountStore: users.json, PBKDF2 hashing, roles + capabilities
+  roster.py                StaffRoster: roster.json (placeholder staff + attributes)
   store.py                 ScheduleStore: upload/parse/persist + tokens + call-outs +
                              availability offers + contact overrides + adaptive stats
   coverage.py              cover-suggestion engine (free/move/cascade), adaptive scoring
@@ -64,7 +65,8 @@ server/                    FastAPI app (serves API + built React app)
 web/                       React + Vite frontend (built to web/dist)
   src/App.jsx              shell: login + role-aware tabs
   src/components/          Login, ScheduleGrid, MyCalendar, MyAvailability,
-                             Coverage, Admin (upload), Users, Insights, Activity
+                             Coverage, Admin (upload), Create (builder), Users,
+                             Insights, Activity
   src/api.js, utils.js     fetch wrapper, date/colour helpers
 
 tests/                     pytest (10 tests) — run with `python -m pytest`
