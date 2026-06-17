@@ -27,7 +27,8 @@ Two layers:
 |-----|--------------|
 | **`docs/SCHEDULE_FORMAT.md`** | **The domain knowledge** — exact workbook layout, every shift code, every shift time, colours, availability rules. Most of this came from the schedule owner and is NOT derivable from the code. Start here to understand *why* the parser does what it does. |
 | **`docs/DECISIONS.md`** | Decisions made with the owner, rationale, and the list of **open items / future work**. |
-| **`SERVER.md`** | How to deploy and run on the Pi (env vars, HTTPS/Caddy, systemd). |
+| **`DEPLOY_QUICKSTART.md`** | Copy-paste commands to deploy on the Pi. |
+| **`SERVER.md`** | Deploy reference — env vars, HTTPS/Caddy, systemd, and the *why*. |
 | **`README.md`** | CLI usage of the extractor + the generic layouts. |
 
 ## Repository map

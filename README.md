@@ -8,7 +8,8 @@
 > | [`CLAUDE.md`](CLAUDE.md) | Project overview, repo map, quick start (read first) |
 > | [`docs/SCHEDULE_FORMAT.md`](docs/SCHEDULE_FORMAT.md) | The schedule's layout, every code, every shift time (domain knowledge) |
 > | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Decisions, rationale, and open items / future work |
-> | [`SERVER.md`](SERVER.md) | Running the web app on a Raspberry Pi (env vars, HTTPS, systemd) |
+> | [`DEPLOY_QUICKSTART.md`](DEPLOY_QUICKSTART.md) | Copy-paste commands to deploy on a Raspberry Pi |
+> | [`SERVER.md`](SERVER.md) | Web app deploy reference (env vars, HTTPS, systemd, the *why*) |
 
 Takes an Excel workbook and extracts **someone's schedule** into structured JSON.
 
