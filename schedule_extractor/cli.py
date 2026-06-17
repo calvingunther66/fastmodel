@@ -39,6 +39,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory to save extracted images (default: extracted_images)",
     )
     parser.add_argument(
+        "--layout",
+        choices=["auto", "roster"],
+        default="auto",
+        help=(
+            "'auto' = generic date-grid + image OCR (default). "
+            "'roster' = blocked roster where each person is a 3-row box and a "
+            "code's vertical position marks day vs night shift."
+        ),
+    )
+    parser.add_argument(
+        "--sheet",
+        default=None,
+        help="Sheet name to read in roster layout (default: first/active sheet)",
+    )
+    parser.add_argument(
+        "--year",
+        type=int,
+        default=2026,
+        help="Fallback year for roster dates if the title lacks one (default: 2026)",
+    )
+    parser.add_argument(
         "--pretty", action="store_true", help="Pretty-print the JSON output"
     )
     return parser
@@ -47,14 +68,26 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        result = extract_workbook(
-            args.input,
-            header_row=args.header_row,
-            name_col=args.name_col,
-            image_dir=args.image_dir,
-        )
+        if args.layout == "roster":
+            import openpyxl
+
+            from .roster_extractor import extract_roster
+
+            wb = openpyxl.load_workbook(args.input, data_only=True)
+            ws = wb[args.sheet] if args.sheet else wb.worksheets[0]
+            result = extract_roster(ws, default_year=args.year)
+        else:
+            result = extract_workbook(
+                args.input,
+                header_row=args.header_row,
+                name_col=args.name_col,
+                image_dir=args.image_dir,
+            )
     except FileNotFoundError:
         print(f"error: file not found: {args.input}", file=sys.stderr)
+        return 1
+    except KeyError:
+        print(f"error: sheet not found: {args.sheet}", file=sys.stderr)
         return 1
     write_json(result, args.output, pretty=args.pretty)
     return 0

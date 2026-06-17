@@ -83,6 +83,40 @@ python -m pytest                                             # run the tests
 - Both are overridable via `--header-row` / `--name-col` for unusual layouts. The
   decisions taken are reported in each sheet's `warnings`.
 
+## Blocked-roster layout (`--layout roster`)
+
+Some real rosters encode the schedule by **box position** rather than by a flat
+grid. In the sample worked here, each person is a 3-row box (name on top, two
+contact rows below), the date numbers live on row 2 (with month rollover), and:
+
+- a code on the **top row, level with the name, is a DAY shift**;
+- a code sitting **lower in the box is a NIGHT shift** (the "smaller bottom box");
+- short alphabetic tokens (`BC`, `H`, `R`, `V`, `A`, `UL`, `OK`, `*`, …) are
+  treated as shift codes; anything longer/free-text is captured as a **note**.
+
+```bash
+python -m schedule_extractor roster.xlsx --layout roster \
+  --sheet "June 21 - July 18, 26" -o roster.json --pretty
+```
+
+Output (per person):
+
+```json
+{
+  "name": "CHOI",
+  "contact": ["C: 417-342-4960", "P: TXT TO CELL"],
+  "shifts": [
+    {"date": "2026-07-03", "code": "H",  "shift_type": "day"},
+    {"date": "2026-07-03", "code": "BC", "shift_type": "night"}
+  ],
+  "notes": [{"date": null, "text": "Husband will be working ... Available for nights on 7/14"}]
+}
+```
+
+Codes stay **raw** — mapping them to clock times (e.g. `BC` = 07:00–19:00 day /
+19:00–07:00 night) is a later, user-supplied step. `--sheet` selects the tab and
+`--year` provides the year if the sheet title lacks one.
+
 ## Scope / limitations
 
 - Cell extraction is the primary, exact path.

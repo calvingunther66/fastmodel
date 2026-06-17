@@ -6,3 +6,5 @@ venv/
 .pytest_cache/
 extracted_images/
 out.json
+# Real, PII-containing schedules and their derived outputs — never commit
+real_samples/
