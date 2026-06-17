@@ -35,6 +35,7 @@ class ScheduleStore:
         self.contacts_path = data_dir / "contacts.json"
         self.offers_path = data_dir / "availability.json"
         self.stats_path = data_dir / "stats.json"
+        self.settings_path = data_dir / "settings.json"
         self._lock = threading.Lock()
 
     # ---- low-level json helpers ------------------------------------------
@@ -230,6 +231,24 @@ class ScheduleStore:
             })
         rows.sort(key=lambda r: (-r["covers"], -r["worked_total"], r["name"]))
         return {"periods": agg["periods"], "people": rows}
+
+    # ---- tunable settings -------------------------------------------------
+    def _settings(self) -> dict:
+        return self._read_json(self.settings_path, {})
+
+    def get_fairness_weight(self) -> float:
+        try:
+            return max(0.0, min(1.0, float(self._settings().get("fairness_weight", 0.5))))
+        except (TypeError, ValueError):
+            return 0.5
+
+    def set_fairness_weight(self, value: float) -> float:
+        w = max(0.0, min(1.0, float(value)))
+        with self._lock:
+            s = self._settings()
+            s["fairness_weight"] = w
+            self._write_json(self.settings_path, s)
+        return w
 
     # ---- call-out overrides ----------------------------------------------
     def _callouts(self) -> list[dict]:

@@ -194,6 +194,13 @@ button.ghost.small { padding: 2px 8px; font-size: 0.78rem; }
 .bar-wrap { position: relative; display: flex; align-items: center; gap: 6px; min-width: 120px; }
 .bar { height: 12px; background: var(--accent); border-radius: 3px; min-width: 2px; }
 .bar-num { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* scoring dial */
+.tuner { background: #fafbfc; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; }
+.tuner h3 { margin: 0 0 4px; }
+.slider-row { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; color: var(--muted); }
+.slider-row input[type=range] { flex: 1; max-width: 320px; }
+.slider-val { font-weight: 700; color: var(--ink); min-width: 80px; }
 .callout-list li {
   display: grid;
   grid-template-columns: 1fr 1fr 1.4fr auto;

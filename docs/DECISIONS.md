@@ -78,8 +78,14 @@ reasoning, and what's still open. Useful when resuming with no chat history.
   Bonuses are additive on top of the static heuristics; with no history, behaviour
   is unchanged.
 - **Step-up dashboard** (`/api/coverage/leaderboard`, **Insights** tab): ranks who
-  covers the most, with per-person cover/work breakdowns. Visible to oversight. It
-  celebrates the reliable folks while the recommender gives others the next turn.
+  covers the most, with per-person cover/work breakdowns. It celebrates the reliable
+  folks while the recommender gives others the next turn.
+- **Tunable dial** (`/api/coverage/settings`, `fairness_weight` 0..1, default 0.5,
+  persisted in `data/settings.json`): a slider in the Insights tab dials competence
+  vs fairness (0 = pure competence/availability, 1 = pure load-balancing).
+- **Two new delegatable capabilities**, deliberately independent so the leaderboard
+  and the dial can be handed out separately: `view_leaderboard` (see the dashboard)
+  and `tune_scoring` (move the dial). Both are admin-implicit.
 
 ## Open items / future work
 

@@ -16,6 +16,7 @@ def _store(tmp_path):
     s.contacts_path = tmp_path / "contacts.json"
     s.offers_path = tmp_path / "availability.json"
     s.stats_path = tmp_path / "stats.json"
+    s.settings_path = tmp_path / "settings.json"
     s._lock = threading.Lock()
     return s
 
@@ -65,6 +66,32 @@ def test_work_frequency_recorded_once_per_period(tmp_path):
     agg = s.aggregated_stats()
     assert agg["periods"] == 1
     assert agg["work"]["SICK"]["by_code"]["BC"] == 1
+
+
+def test_fairness_weight_controls_balance(tmp_path):
+    s = _store(tmp_path)
+    for _ in range(4):
+        s._bump_cover("ANNA", "BC", "night")  # ANNA is a heavy coverer
+    st = s.aggregated_stats()
+
+    # Pure competence: ANNA (experienced/works it) is not penalised for covering.
+    comp = propose(_sched(), "SICK", "2026-06-01", "night", stats=st, fairness_weight=0.0)
+    comp_scores = {c["name"]: c["score"] for c in comp["free_candidates"]}
+    # Pure fairness: ANNA is pushed below BECK to spread the load.
+    fair = propose(_sched(), "SICK", "2026-06-01", "night", stats=st, fairness_weight=1.0)
+    fair_scores = {c["name"]: c["score"] for c in fair["free_candidates"]}
+
+    assert comp_scores["ANNA"] >= comp_scores["BECK"]   # competence doesn't punish ANNA
+    assert fair_scores["BECK"] > fair_scores["ANNA"]    # fairness favours BECK
+
+
+def test_fairness_weight_setting_clamped(tmp_path):
+    s = _store(tmp_path)
+    assert s.get_fairness_weight() == 0.5            # default
+    assert s.set_fairness_weight(0.8) == 0.8
+    assert s.get_fairness_weight() == 0.8            # persisted
+    assert s.set_fairness_weight(5) == 1.0           # clamped high
+    assert s.set_fairness_weight(-3) == 0.0          # clamped low
 
 
 def test_leaderboard_ranks_by_covers(tmp_path):

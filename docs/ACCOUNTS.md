@@ -34,6 +34,11 @@ Capabilities an admin can toggle per member (delegation):
 | `upload` | upload / re-parse schedules |
 | `manage_coverage` | mark anyone out, assign covers, run cascades, edit any contact |
 | `manage_users` | create / edit / delete accounts |
+| `view_leaderboard` | see the step-up dashboard (Insights tab) |
+| `tune_scoring` | adjust the fairness-vs-competence scoring dial |
+
+`view_leaderboard` and `tune_scoring` are independent: you can give someone the
+dashboard without the dial, or the dial without the dashboard.
 
 A member with, say, `manage_coverage` becomes a coverage coordinator without
 being a full admin.

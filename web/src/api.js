@@ -49,6 +49,9 @@ export const api = {
   audit: (limit = 200) => req(`/api/audit?limit=${limit}`),
   coverageStats: () => req("/api/coverage/stats"),
   leaderboard: () => req("/api/coverage/leaderboard"),
+  coverageSettings: () => req("/api/coverage/settings"),
+  setCoverageSettings: (fairness_weight) =>
+    req("/api/coverage/settings", { method: "POST", body: JSON.stringify({ fairness_weight }) }),
 
   callouts: () => req("/api/coverage/callouts"),
   sick: (name, date, shift_type) =>

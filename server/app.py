@@ -195,7 +195,8 @@ def _propose(name, date, shift_type):
     schedule = store.get_schedule() or {"people": []}
     return propose_coverage(schedule, name, date, shift_type,
                             offered=store.offers_for_date(date),
-                            stats=store.aggregated_stats())
+                            stats=store.aggregated_stats(),
+                            fairness_weight=store.get_fairness_weight())
 
 
 @app.get("/api/coverage/callouts")
@@ -209,8 +210,25 @@ def coverage_stats(user: dict = Depends(require_oversight)):
 
 
 @app.get("/api/coverage/leaderboard")
-def coverage_leaderboard(user: dict = Depends(require_oversight)):
+def coverage_leaderboard(user: dict = Depends(require_cap("view_leaderboard"))):
     return store.leaderboard()
+
+
+@app.get("/api/coverage/settings")
+def coverage_settings(user: dict = Depends(require_auth)):
+    return {"fairness_weight": store.get_fairness_weight()}
+
+
+@app.post("/api/coverage/settings")
+def set_coverage_settings(payload: dict, user: dict = Depends(require_cap("tune_scoring"))):
+    if "fairness_weight" not in payload:
+        raise HTTPException(status_code=400, detail="fairness_weight is required")
+    try:
+        w = store.set_fairness_weight(payload["fairness_weight"])
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="fairness_weight must be 0..1")
+    audit.log(user["username"], "tune_scoring", {"fairness_weight": w})
+    return {"fairness_weight": w}
 
 
 @app.post("/api/coverage/propose")

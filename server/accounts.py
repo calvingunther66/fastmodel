@@ -11,6 +11,8 @@ Capabilities (delegatable to members):
   upload           — upload / re-parse schedules
   manage_coverage  — mark anyone out, assign covers, run cascades
   manage_users     — create / edit / delete accounts
+  view_leaderboard — see the step-up dashboard (Insights tab)
+  tune_scoring     — adjust the fairness-vs-competence weight
 """
 
 from __future__ import annotations
@@ -25,7 +27,13 @@ from pathlib import Path
 
 from .config import APP_PASSWORD, APP_USERNAME, DATA_DIR
 
-CAPABILITIES = ["upload", "manage_coverage", "manage_users"]
+CAPABILITIES = [
+    "upload",            # upload / re-parse schedules
+    "manage_coverage",   # mark out, assign covers, run cascades
+    "manage_users",      # create / edit / delete accounts
+    "view_leaderboard",  # see the step-up dashboard (Insights)
+    "tune_scoring",      # adjust the fairness-vs-competence weight
+]
 ROLES = ["admin", "member"]
 
 

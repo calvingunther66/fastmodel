@@ -85,18 +85,22 @@ def _cover_average(schedule, stats) -> float:
     return sum(covers.get(n, {}).get("count", 0) for n in names) / len(names)
 
 
-def _adaptive_bonus(cand, open_code, shift_type, stats, cover_avg, reasons):
+def _adaptive_bonus(cand, open_code, shift_type, stats, cover_avg, reasons,
+                    fairness_weight=0.5):
     """History-based adjustment on top of the static heuristics. Returns
     (bonus, fairness_phrase).
 
-    Two signals, deliberately pulling in different directions:
-      * competence — works this location/shift often → small positive (familiarity).
+    Two signals, deliberately pulling in different directions, with their relative
+    influence set by `fairness_weight` (0..1, default 0.5 = balanced):
+      * competence — works this location/shift often → familiarity (weight 1-w).
       * fairness   — load-balances cover duty: people who've stepped up a lot get
-                     eased off, people who rarely cover get a turn. Keeps the
-                     willing few from burning out.
+                     eased off, people who rarely cover get a turn (weight w).
+    At w=0 it's pure competence/availability; at w=1 it's pure load-balancing.
     """
     if not stats:
         return 0, ""
+    comp_mult = (1.0 - fairness_weight) * 2.0   # 0..2 (1 at default)
+    fair_mult = fairness_weight * 2.0           # 0..2 (1 at default)
     bonus = 0
     work = stats.get("work", {}).get(cand, {})
     covers = stats.get("covers", {}).get(cand, {})
@@ -104,18 +108,18 @@ def _adaptive_bonus(cand, open_code, shift_type, stats, cover_avg, reasons):
     # --- competence (positive) ---
     worked_loc = work.get("by_code", {}).get(open_code, 0)
     if worked_loc:
-        bonus += min(15, worked_loc * 2)
+        bonus += round(min(15, worked_loc * 2) * comp_mult)
         reasons.append(f"works {open_code} regularly ({worked_loc}× on record)")
     if shift_type == "night":
         nights = work.get("by_type", {}).get("night", 0)
         if nights:
-            bonus += min(10, nights)
+            bonus += round(min(10, nights) * comp_mult)
             reasons.append(f"works nights regularly ({nights}× on record)")
 
     # --- fairness / load balancing ---
     stepped = covers.get("count", 0)
     delta = cover_avg - stepped  # positive => below average => should get a turn
-    fair = max(-25, min(25, round(delta * 6)))
+    fair = max(-30, min(30, round(delta * 6 * fair_mult)))
     bonus += fair
     if cover_avg <= 0:
         phrase = ""
@@ -135,7 +139,7 @@ def _adaptive_bonus(cand, open_code, shift_type, stats, cover_avg, reasons):
 
 
 def _free_candidates(schedule, date, code, shift_type, exclude, profiles,
-                     offered=frozenset(), stats=None, cover_avg=0.0):
+                     offered=frozenset(), stats=None, cover_avg=0.0, fairness_weight=0.5):
     """Ranked people who are free/available to take a (date, code, shift_type) shift."""
     open_code = (code or "").upper()
     meaning = decode(code)["meaning"] if code else None
@@ -172,7 +176,8 @@ def _free_candidates(schedule, date, code, shift_type, exclude, profiles,
             else:
                 score -= 5
                 reasons.append("no record of night shifts")
-        bonus, fairness = _adaptive_bonus(cand, open_code, shift_type, stats, cover_avg, reasons)
+        bonus, fairness = _adaptive_bonus(cand, open_code, shift_type, stats,
+                                          cover_avg, reasons, fairness_weight)
         score += bonus
 
         avail = ("on the on-call pool" if state == "available"
@@ -192,7 +197,7 @@ def _free_candidates(schedule, date, code, shift_type, exclude, profiles,
 
 
 def _move_candidates(schedule, date, code, shift_type, exclude, profiles,
-                     stats=None, cover_avg=0.0):
+                     stats=None, cover_avg=0.0, fairness_weight=0.5):
     """Ranked people working a reassignable shift who are qualified for the open one."""
     open_code = (code or "").upper()
     meaning = decode(code)["meaning"] if code else None
@@ -216,7 +221,8 @@ def _move_candidates(schedule, date, code, shift_type, exclude, profiles,
         if cur_type in ("day", "midshift") and cur_code not in ("BC", "HC"):
             score += 10
             reasons.append("current assignment looks reassignable")
-        bonus, fairness = _adaptive_bonus(cand, open_code, shift_type, stats, cover_avg, reasons)
+        bonus, fairness = _adaptive_bonus(cand, open_code, shift_type, stats,
+                                          cover_avg, reasons, fairness_weight)
         score += bonus
         explanation = (f"{cand} is qualified for {meaning or open_code} and currently on "
                        f"{cur_meaning} ({cur_type}), which can be reassigned.")
@@ -233,7 +239,7 @@ def _move_candidates(schedule, date, code, shift_type, exclude, profiles,
 
 
 def _cascades(schedule, sick_name, date, open_code, open_type, moves, profiles,
-              stats=None, cover_avg=0.0):
+              stats=None, cover_avg=0.0, fairness_weight=0.5):
     """For each move candidate, find a free backfill for their vacated slot."""
     open_meaning = decode(open_code)["meaning"] if open_code else open_code
     cascades = []
@@ -242,7 +248,7 @@ def _cascades(schedule, sick_name, date, open_code, open_type, moves, profiles,
         backfills = _free_candidates(
             schedule, date, frm["code"], frm["shift_type"],
             exclude={sick_name, m["name"]}, profiles=profiles, stats=stats,
-            cover_avg=cover_avg,
+            cover_avg=cover_avg, fairness_weight=fairness_weight,
         )
         if not backfills:
             continue
@@ -266,11 +272,12 @@ def _cascades(schedule, sick_name, date, open_code, open_type, moves, profiles,
 
 
 def propose(schedule: dict, name: str, date: str, shift_type: str,
-            offered=frozenset(), stats=None) -> dict:
+            offered=frozenset(), stats=None, fairness_weight=0.5) -> dict:
     """Return coverage proposals for the open shift (name, date, shift_type).
 
     `offered` is the set of people who have declared they can cover that date.
     `stats` (optional) is accumulated work/cover history that makes scoring adaptive.
+    `fairness_weight` (0..1) dials competence vs load-balancing.
     """
     open_shift = find_open_shift(schedule, name, date, shift_type)
     open_code = (open_shift or {}).get("code", "") or ""
@@ -280,11 +287,11 @@ def propose(schedule: dict, name: str, date: str, shift_type: str,
     cover_avg = _cover_average(schedule, stats)
     exclude = {name}
     free = _free_candidates(schedule, date, open_code, shift_type, exclude, profiles,
-                            offered, stats, cover_avg)
+                            offered, stats, cover_avg, fairness_weight)
     moves = _move_candidates(schedule, date, open_code, shift_type, exclude, profiles,
-                             stats, cover_avg)
+                             stats, cover_avg, fairness_weight)
     cascades = _cascades(schedule, name, date, open_code.upper(), shift_type, moves,
-                         profiles, stats, cover_avg)
+                         profiles, stats, cover_avg, fairness_weight)
 
     return {
         "open_shift": {
