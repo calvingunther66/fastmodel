@@ -59,6 +59,64 @@ def test_roster_levels_and_enrichment():
     assert "long free text note here" in note_texts   # non-code in a date cell
 
 
+def test_location_day_windows():
+    """BC/HC days use legend hours; clinics default to a full 8-5 day."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "June 21 - June 24, 26"
+    ws.cell(2, 1, "DATE")
+    for col, day in [(2, 21), (3, 22), (4, 23)]:
+        ws.cell(2, col, day)
+    ws.cell(4, 1, "DOE")
+    ws.cell(4, 2, "BC")   # Birth Center day
+    ws.cell(4, 3, "HC")   # Hillcrest day
+    ws.cell(4, 4, "CV")   # Convoy = clinic -> full day
+
+    by = {s["code"]: s for s in extract_roster(ws)["people"][0]["shifts"]}
+    assert (by["BC"]["start"], by["BC"]["end"]) == ("07:30", "20:00")
+    assert (by["HC"]["start"], by["HC"]["end"]) == ("07:00", "19:30")
+    assert (by["CV"]["start"], by["CV"]["end"]) == ("08:00", "17:00")
+    assert by["CV"]["meaning"] == "Convoy"
+
+
+def test_clinic_split_morning_afternoon():
+    """A coloured center bar splits a clinic day into morning + afternoon halves."""
+    from openpyxl.styles import PatternFill
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "June 21 - June 22, 26"
+    ws.cell(2, 1, "DATE")
+    ws.cell(2, 2, 21)
+    ws.cell(4, 1, "DOE")
+    ws.cell(4, 2, "MOS")                      # clinic, day row -> morning when split
+    ws.cell(5, 1, "C: x")
+    mid = ws.cell(5, 2, "CV")                 # mid row -> afternoon
+    mid.fill = PatternFill("solid", fgColor="FFFFFF00")  # coloured center bar
+    ws.cell(6, 1, "P: y")
+
+    by = {(s["code"], s["shift_type"]): s for s in extract_roster(ws)["people"][0]["shifts"]}
+    morning = by[("MOS", "day")]
+    afternoon = by[("CV", "midshift")]
+    assert (morning["start"], morning["end"]) == ("08:00", "12:00")
+    assert morning["split_day"] is True
+    assert (afternoon["start"], afternoon["end"]) == ("13:00", "17:00")
+
+
+def test_ok_is_alias_for_available():
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "June 21 - June 22, 26"
+    ws.cell(2, 1, "DATE")
+    ws.cell(2, 2, 21)
+    ws.cell(4, 1, "DOE")
+    ws.cell(4, 2, "OK")
+    shift = extract_roster(ws)["people"][0]["shifts"][0]
+    assert shift["category"] == "status"
+    assert shift["meaning"] == "Available / on-call pool"
+    assert shift["start"] is None  # availability marker, no clock window
+
+
 def test_vacation_approved_by_green_fill():
     from openpyxl.styles import PatternFill
 

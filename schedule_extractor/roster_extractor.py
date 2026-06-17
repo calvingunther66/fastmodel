@@ -23,6 +23,7 @@ import re
 from .definitions import (
     OFFSET_LEVEL,
     decode,
+    has_solid_fill,
     is_green_fill,
     shift_window,
 )
@@ -169,17 +170,30 @@ def extract_roster(ws, *, default_year: int = 2026,
                     # free-text note column to the right of the calendar
                     notes.append({"date": None, "text": text})
 
-        # A date is "split" when both the day row and the mid row are filled.
+        # A date is "split" when both the day row and the mid row carry a code,
+        # OR the box's center bar (the mid row of that date) is coloured in.
+        mid_row = block_rows[1] if len(block_rows) > 1 else None
         offsets_by_date: dict[str, set[int]] = {}
-        for date, offset, _code, _cell in records:
+        cols_by_date: dict[str, int] = {}
+        for date, offset, _code, cell in records:
             offsets_by_date.setdefault(date, set()).add(offset)
-        split_dates = {d for d, offs in offsets_by_date.items() if 0 in offs and 1 in offs}
+            cols_by_date[date] = cell.column
+        split_dates = set()
+        for date, offs in offsets_by_date.items():
+            center_coloured = (
+                mid_row is not None
+                and has_solid_fill(ws.cell(mid_row, cols_by_date[date]))
+            )
+            if (0 in offs and 1 in offs) or center_coloured:
+                split_dates.add(date)
 
         shifts = []
         for date, offset, code, cell in records:
             shift_type = OFFSET_LEVEL.get(offset, "night")
             info = decode(code)
-            start, end, crosses = shift_window(code, shift_type)
+            start, end, crosses = shift_window(
+                code, shift_type, split=date in split_dates
+            )
             shift = {
                 "date": date,
                 "code": code,

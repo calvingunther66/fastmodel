@@ -33,11 +33,21 @@ STATUS = {
     "no": "Unavailable / out sick",
     "H": "Holiday",
     "A": "Available / on-call pool",
+    "OK": "Available / on-call pool",   # OK is an alias for A
 }
 
-# Fixed shift windows we can state confidently. (start, end, crosses_midnight)
-NIGHT_WINDOW = ("19:30", "08:00", True)
-TRIAGE_WINDOW = ("07:30", "18:00", False)
+# Anything that isn't the Birth Center or Hillcrest is a "clinic" and runs a
+# standard full day unless the box's center bar is coloured in (a split).
+CLINICS = {"CV", "VLJ", "RB", "MOS", "ENC"}
+
+# Shift windows. (start, end, crosses_midnight)
+NIGHT_WINDOW = ("19:30", "08:00", True)     # any night row (legend: 7:30p-8a)
+TRIAGE_WINDOW = ("07:30", "18:00", False)   # T (legend: 7:30a-6p)
+BC_DAY_WINDOW = ("07:30", "20:00", False)   # Birth Center day (legend: 7:30a-8p)
+HC_DAY_WINDOW = ("07:00", "19:30", False)   # Hillcrest day (legend: 7:00a-7:30p)
+CLINIC_DAY_WINDOW = ("08:00", "17:00", False)        # full clinic day
+CLINIC_MORNING_WINDOW = ("08:00", "12:00", False)    # split: morning half
+CLINIC_AFTERNOON_WINDOW = ("13:00", "17:00", False)  # split: afternoon half
 
 # Row offset within a person's 3-row block -> shift level.
 OFFSET_LEVEL = {0: "day", 1: "midshift", 2: "night"}
@@ -46,30 +56,49 @@ OFFSET_LEVEL = {0: "day", 1: "midshift", 2: "night"}
 def decode(code: str) -> dict:
     """Return {'category', 'meaning'} for a raw code (category may be 'unknown')."""
     key = code.strip()
-    if key in LOCATIONS:
-        return {"category": "location", "meaning": LOCATIONS[key]}
-    if key in STATUS:
-        return {"category": "status", "meaning": STATUS[key]}
-    # case-insensitive fallback (e.g. 'bc')
     upper = key.upper()
-    if upper in LOCATIONS:
-        return {"category": "location", "meaning": LOCATIONS[upper]}
+    if key in STATUS or upper in STATUS:
+        return {"category": "status", "meaning": STATUS.get(key, STATUS.get(upper))}
+    if key in LOCATIONS or upper in LOCATIONS:
+        return {"category": "location", "meaning": LOCATIONS.get(key, LOCATIONS.get(upper))}
     return {"category": "unknown", "meaning": None}
 
 
-def shift_window(code: str, shift_type: str):
-    """(start, end, crosses_midnight) for a shift, or (None, None, False) if variable.
+def shift_window(code: str, shift_type: str, split: bool = False):
+    """(start, end, crosses_midnight) for a shift, or (None, None, False).
 
-    Time-off markers carry no clock window.
+    Status/time-off markers carry no clock window. Nights are fixed. Days depend
+    on location; clinics are a full day unless `split`, in which case the day row
+    is the morning half and the mid row is the afternoon half.
     """
-    key = code.strip()
-    if key in STATUS:
+    if decode(code)["category"] == "status":
         return (None, None, False)
+
+    upper = code.strip().upper()
     if shift_type == "night":
         return NIGHT_WINDOW
-    if key.upper() == "T":
+    if upper == "T":
         return TRIAGE_WINDOW
-    return (None, None, False)  # day length is location-dependent / not yet defined
+    if upper == "BC":
+        return BC_DAY_WINDOW
+    if upper == "HC":
+        return HC_DAY_WINDOW
+    if upper in CLINICS:
+        if shift_type == "midshift":
+            return CLINIC_AFTERNOON_WINDOW
+        return CLINIC_MORNING_WINDOW if split else CLINIC_DAY_WINDOW
+    return (None, None, False)  # unknown / undefined timing
+
+
+def has_solid_fill(cell) -> bool:
+    """True if a cell has any non-empty solid fill (e.g. a coloured center bar)."""
+    fill = getattr(cell, "fill", None)
+    if not fill or fill.patternType != "solid":
+        return False
+    rgb = getattr(fill.fgColor, "rgb", None)
+    if not isinstance(rgb, str) or len(rgb) < 6:
+        return False
+    return rgb[-6:].upper() not in ("FFFFFF", "000000")
 
 
 def is_green_fill(cell) -> bool:
