@@ -160,6 +160,18 @@ def coverage_assign(payload: dict, request: Request, _: None = Depends(require_a
     return {"ok": True, "covered_by": covered_by}
 
 
+@app.post("/api/coverage/assign-cascade")
+def coverage_assign_cascade(payload: dict, request: Request, _: None = Depends(require_auth)):
+    name, date, shift_type = _coverage_target(payload)
+    mover, backfill = payload.get("mover"), payload.get("backfill")
+    frm = payload.get("from") or {}
+    if not (mover and backfill and frm.get("shift_type")):
+        raise HTTPException(status_code=400, detail="mover, backfill and from are required")
+    store.assign_cascade(name, date, shift_type, mover,
+                         frm.get("code"), frm["shift_type"], backfill)
+    return {"ok": True, "mover": mover, "backfill": backfill}
+
+
 @app.post("/api/coverage/clear")
 def coverage_clear(payload: dict, request: Request, _: None = Depends(require_auth)):
     name, date, shift_type = _coverage_target(payload)

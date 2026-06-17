@@ -34,6 +34,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name, date, shift_type, covered_by }),
     }),
+  assignCascade: (open, cascade) =>
+    req("/api/coverage/assign-cascade", {
+      method: "POST",
+      body: JSON.stringify({
+        name: open.name, date: open.date, shift_type: open.shift_type,
+        mover: cascade.mover, backfill: cascade.backfill, from: cascade.from,
+      }),
+    }),
   clearCallout: (name, date, shift_type) =>
     req("/api/coverage/clear", { method: "POST", body: JSON.stringify({ name, date, shift_type }) }),
   async upload(file) {

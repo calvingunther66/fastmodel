@@ -140,6 +140,18 @@ class ScheduleStore:
                 })
             self._save_callouts(callouts)
 
+    def assign_cascade(self, name: str, date: str, shift_type: str,
+                       mover: str, from_code: str | None, from_type: str,
+                       backfill: str) -> None:
+        """Apply a two-step cascade: mover covers the open shift, a free person
+        backfills the mover's vacated slot."""
+        # 1) mover covers the open (sick) shift
+        self.assign_cover(name, date, shift_type, mover)
+        # 2) the mover's own slot becomes a call-out, backfilled by `backfill`
+        self.mark_sick(mover, date, from_type, code=from_code,
+                       reason=f"moved to cover {name}")
+        self.assign_cover(mover, date, from_type, backfill)
+
     def clear_callout(self, name: str, date: str, shift_type: str) -> None:
         with self._lock:
             callouts = [c for c in self._callouts()

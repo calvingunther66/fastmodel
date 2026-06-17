@@ -65,9 +65,11 @@ reasoning, and what's still open. Useful when resuming with no chat history.
   the admin **assign** a cover — which injects the shift into that person's grid
   row and live `.ics` feed ("covering for X"). It is a **heuristic** (the workbook
   has no explicit qualifications; "qualified" = has worked that location before).
-  Lives in `server/coverage.py` + `web/src/components/Coverage.jsx`; overrides are
-  stored in `data/overrides.json`. Possible next steps: cascading multi-move
-  proposals, honouring the `R`/note availability hints, and an "undo assign".
+  It also proposes **cascades** (move a qualified person onto the open shift and
+  backfill their vacated slot with a free person — applied as two linked
+  call-outs). Lives in `server/coverage.py` + `web/src/components/Coverage.jsx`;
+  overrides are stored in `data/overrides.json`. Possible next steps: deeper
+  (3+ step) chains, honouring the `R`/note availability hints, and an "undo".
 - **Not built:** CSV export; pushing events directly into Google Calendar.
 - **HTTPS is required** for Apple/Google calendar subscriptions — see `SERVER.md`
   (Caddy snippet). Remember to set `PUBLIC_BASE_URL` to the https domain so the

@@ -45,6 +45,17 @@ export default function Coverage({ schedule, onChange }) {
     }
   }
 
+  async function applyCascade(cascade) {
+    setBusy(true);
+    try {
+      await api.assignCascade(proposal.open_shift, cascade);
+      refreshCallouts();
+      onChange();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function clear(co) {
     setBusy(true);
     try {
@@ -104,6 +115,24 @@ export default function Coverage({ schedule, onChange }) {
           <h4>Could be moved</h4>
           <CandidateList rows={proposal.move_candidates} busy={busy} onAssign={assign}
             empty="No qualified people are working that day to move." />
+
+          <h4>Move + backfill (cascade)</h4>
+          {(!proposal.cascades || proposal.cascades.length === 0) && (
+            <p className="muted">No cascade chains found.</p>
+          )}
+          <ul className="cand-list">
+            {(proposal.cascades || []).map((c, i) => (
+              <li key={i}>
+                <div className="cand-main">
+                  <span className="cand-reasons">{c.summary}</span>
+                  <span className="cand-contact">
+                    backfill: {c.backfill_reasons.join("; ")}
+                  </span>
+                </div>
+                <button disabled={busy} onClick={() => applyCascade(c)}>Apply</button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
