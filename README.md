@@ -92,7 +92,11 @@ contact rows below), the date numbers live on row 2 (with month rollover), and:
 - a code on the **top row, level with the name, is a DAY shift**;
 - a code sitting **lower in the box is a NIGHT shift** (the "smaller bottom box");
 - short alphabetic tokens (`BC`, `H`, `R`, `V`, `A`, `UL`, `OK`, `*`, …) are
-  treated as shift codes; anything longer/free-text is captured as a **note**.
+  treated as shift codes; anything longer/free-text is captured as a **note**;
+- a cell of **`no`** (or `no <code>`) is an **availability flag**: the person is
+  not available / out sick that day. Those dates appear in the person's
+  `unavailable` list, and any shift on that date is marked `"available": false`
+  — i.e. the shift that needs covering when someone calls out.
 
 ```bash
 python -m schedule_extractor roster.xlsx --layout roster \
@@ -106,9 +110,10 @@ Output (per person):
   "name": "CHOI",
   "contact": ["C: 417-342-4960", "P: TXT TO CELL"],
   "shifts": [
-    {"date": "2026-07-03", "code": "H",  "shift_type": "day"},
-    {"date": "2026-07-03", "code": "BC", "shift_type": "night"}
+    {"date": "2026-07-03", "code": "H",  "shift_type": "day",   "available": true},
+    {"date": "2026-07-03", "code": "BC", "shift_type": "night", "available": true}
   ],
+  "unavailable": [],
   "notes": [{"date": null, "text": "Husband will be working ... Available for nights on 7/14"}]
 }
 ```

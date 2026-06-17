@@ -34,6 +34,22 @@ def _is_code(text: str) -> bool:
     return bool(_CODE_RE.match(text.strip()))
 
 
+def _parse_no(text: str):
+    """Detect an availability flag.
+
+    A cell of 'no' (optionally 'no <code>', e.g. 'no BC') means the person is
+    NOT available / out sick for that day. Returns (is_unavailable, affected_code)
+    where affected_code is the shift they can't cover, if named inline.
+    """
+    s = text.strip().lower()
+    if s == "no":
+        return True, None
+    if s.startswith("no ") or s.startswith("no "):
+        remainder = text.strip()[3:].strip()
+        return True, (remainder if remainder else None)
+    return False, None
+
+
 def _parse_start_month_year(title: str, default_year: int):
     """Pull the starting month/year out of a title like 'June 21 - July 18, 26'."""
     month = 1
@@ -104,7 +120,8 @@ def extract_roster(ws, *, default_year: int = 2026,
             if ws.cell(r, 1).value not in (None, "")
         ]
 
-        shifts = []
+        # Group each date column's codes by day/night, tracking 'no' availability.
+        by_date: dict[str, dict] = {}
         notes = []
         for offset, r in enumerate(block_rows):
             shift_type = "day" if offset == 0 else "night"
@@ -117,24 +134,46 @@ def extract_roster(ws, *, default_year: int = 2026,
                 if not text:
                     continue
                 if c in date_col_set:
-                    if _is_code(text):
-                        shifts.append({
-                            "date": date_axis[c],
-                            "code": text,
-                            "shift_type": shift_type,
-                        })
+                    date = date_axis[c]
+                    slot = by_date.setdefault(
+                        date, {"day": [], "night": [], "unavailable": False}
+                    )
+                    is_no, affected = _parse_no(text)
+                    if is_no:
+                        slot["unavailable"] = True
+                        if affected and _is_code(affected):
+                            slot[shift_type].append(affected)
+                    elif _is_code(text):
+                        slot[shift_type].append(text)
                     else:
-                        notes.append({"date": date_axis[c], "text": text})
+                        notes.append({"date": date, "text": text})
                 elif c > last_date_col:
                     # free-text note column to the right of the calendar
                     notes.append({"date": None, "text": text})
 
-        has_content = bool(name) or shifts or notes
+        shifts = []
+        unavailable = []
+        for date, slot in by_date.items():
+            for st in ("day", "night"):
+                for code in slot[st]:
+                    shifts.append({
+                        "date": date,
+                        "code": code,
+                        "shift_type": st,
+                        "available": not slot["unavailable"],
+                    })
+            if slot["unavailable"]:
+                unavailable.append(
+                    {"date": date, "reason": "not available / out sick"}
+                )
+
+        has_content = bool(name) or shifts or notes or unavailable
         if has_content:
             entry = {
                 "name": (str(name).strip() if name not in (None, "") else None),
                 "contact": contact,
                 "shifts": sorted(shifts, key=lambda s: (s["date"], s["shift_type"])),
+                "unavailable": sorted(unavailable, key=lambda u: u["date"]),
                 "notes": notes,
             }
             if entry["name"] is None:

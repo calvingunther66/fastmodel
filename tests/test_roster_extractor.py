@@ -39,3 +39,31 @@ def test_roster_dates_and_daynight():
     note_texts = {n["text"] for n in smith["notes"]}
     assert "covers AM" in note_texts                  # right of the calendar
     assert "long free text note here" in note_texts   # non-code in a date cell
+
+
+def test_roster_no_marks_unavailable():
+    """A 'no' on a date flags the person unavailable and the shift uncoverable."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "June 24 - June 25, 26"
+    ws.cell(2, 1, "DATE")
+    ws.cell(2, 2, 24)
+    ws.cell(2, 3, 25)
+    ws.cell(4, 1, "CORTES")
+    ws.cell(4, 2, "no")     # day row, Jun 24 -> unavailable flag
+    ws.cell(4, 3, "R")      # day row, Jun 25 -> normal shift
+    ws.cell(5, 1, "C: x")
+    ws.cell(5, 2, "BC")     # night row, Jun 24 -> the shift that needs covering
+    ws.cell(6, 1, "P: y")
+
+    res = extract_roster(ws, default_year=2026)
+    cortes = res["people"][0]
+    assert cortes["unavailable"] == [
+        {"date": "2026-06-24", "reason": "not available / out sick"}
+    ]
+    by_key = {(s["date"], s["code"]): s for s in cortes["shifts"]}
+    assert by_key[("2026-06-24", "BC")]["available"] is False  # needs coverage
+    assert by_key[("2026-06-24", "BC")]["shift_type"] == "night"
+    assert by_key[("2026-06-25", "R")]["available"] is True
+    # 'no' itself is never emitted as a shift code
+    assert all(s["code"].lower() != "no" for s in cortes["shifts"])
