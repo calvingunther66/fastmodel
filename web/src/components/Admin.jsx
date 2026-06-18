@@ -6,10 +6,12 @@ export default function Admin({ schedule, onChange }) {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [auto, setAuto] = useState(null);
+  const [issues, setIssues] = useState(null);
   const sheets = schedule?.available_sheets || [];
 
   useEffect(() => {
     api.automationStatus().then(setAuto).catch(() => setAuto(null));
+    api.issues().then(setIssues).catch(() => setIssues(null));
   }, [schedule]);
 
   async function ingestLatest() {
@@ -84,6 +86,26 @@ export default function Admin({ schedule, onChange }) {
       )}
 
       {status && <div className="status">{status}</div>}
+
+      {issues && issues.summary?.total > 0 && (
+        <div className="issues-panel">
+          <h3>Schedule checks
+            <span className="trial">{issues.summary.error}⛔ {issues.summary.warning}⚠ {issues.summary.info}ℹ</span>
+          </h3>
+          <p className="muted">Advisory — the schedule still loads; review anything important.</p>
+          <ul className="issue-list">
+            {issues.issues.slice(0, 40).map((it, i) => (
+              <li key={i} className={`issue ${it.severity}`}>
+                <span className="issue-kind">{it.kind}</span>
+                <span>{it.message}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {issues && issues.summary?.total === 0 && !schedule?.empty && (
+        <p className="ok" style={{ marginTop: 8 }}>✓ No schedule issues detected.</p>
+      )}
 
       {auto && (
         <div className="auto-panel">

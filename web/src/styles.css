@@ -278,3 +278,35 @@ textarea { width: 100%; max-width: 420px; border: 1px solid var(--line); border-
 .audit-list .a-actor { font-weight: 700; }
 .audit-list .a-act { color: var(--accent); }
 .audit-list .a-det { color: var(--ink); }
+
+/* ---- feature batch: roster, open-shifts, issues, prefs, swaps, exports ---- */
+.row.gap { gap: 10px; }
+.row.gap.presets { margin-top: 6px; }
+.chk { display: inline-flex; align-items: center; gap: 3px; font-size: 0.8rem; }
+.ok { color: var(--green); font-size: 0.85rem; }
+.warn { color: #92400e; font-size: 0.85rem; }
+.export-link { margin-left: auto; font-size: 0.8rem; color: var(--accent);
+  text-decoration: none; border: 1px solid var(--line); padding: 1px 8px; border-radius: 6px; }
+
+.grid-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.grid-table th, .grid-table td { text-align: left; padding: 6px 8px;
+  border-bottom: 1px solid var(--line); vertical-align: middle; }
+.grid-table th { color: var(--muted); font-weight: 600; }
+
+.roster-editor input, .roster-editor select { font: inherit; padding: 3px 5px;
+  border: 1px solid var(--line); border-radius: 5px; }
+
+.issues-panel { margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.issue-list { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 4px; }
+.issue { display: flex; gap: 8px; align-items: baseline; font-size: 0.82rem;
+  padding: 4px 8px; border-radius: 6px; border-left: 3px solid var(--line); background: #fafbfc; }
+.issue.error { border-left-color: var(--red); }
+.issue.warning { border-left-color: #f59e0b; }
+.issue.info { border-left-color: var(--accent); }
+.issue-kind { font-size: 0.65rem; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted); min-width: 7.5rem; }
+
+.swap-approvals { margin-bottom: 18px; padding-bottom: 10px; border-bottom: 1px dashed var(--line); }
+.open-shifts h2 { margin-bottom: 4px; }
+button.small { font-size: 0.72rem; padding: 2px 8px; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }

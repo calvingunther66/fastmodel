@@ -10,6 +10,8 @@ import Create from "./components/Create.jsx";
 import Users from "./components/Users.jsx";
 import Insights from "./components/Insights.jsx";
 import Activity from "./components/Activity.jsx";
+import OpenShifts from "./components/OpenShifts.jsx";
+import Roster from "./components/Roster.jsx";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -41,9 +43,12 @@ export default function App() {
     { id: "schedule", label: "Schedule", show: true },
     { id: "calendar", label: "My calendar", show: true },
     { id: "availability", label: "My availability", show: !!user?.person },
+    { id: "openshifts", label: "Open shifts",
+      show: !!user?.person || can("manage_coverage") || can("manage_swaps") },
     { id: "coverage", label: "Coverage", show: can("manage_coverage") },
     { id: "admin", label: "Upload", show: can("upload") },
-    { id: "create", label: "Create", show: can("upload") },
+    { id: "create", label: "Create", show: can("upload") || can("generate_schedule") },
+    { id: "roster", label: "Roster", show: can("manage_roster") },
     { id: "users", label: "Users", show: can("manage_users") },
     { id: "insights", label: "Insights", show: can("view_leaderboard") || can("tune_scoring") },
     { id: "activity", label: "Activity", show: can("manage_users") || can("manage_coverage") },
@@ -74,6 +79,9 @@ export default function App() {
           {schedule.date_range && (
             <span className="muted"> · {schedule.date_range.start} → {schedule.date_range.end}</span>
           )}
+          {can("export") && (
+            <a className="export-link" href="/api/export/schedule.csv">⤓ CSV</a>
+          )}
         </div>
       )}
 
@@ -87,10 +95,13 @@ export default function App() {
         {activeTab === "calendar" && !empty && <MyCalendar schedule={schedule} user={user} />}
         {activeTab === "availability" && !empty &&
           <MyAvailability schedule={schedule} user={user} onChange={loadSchedule} />}
+        {activeTab === "openshifts" &&
+          <OpenShifts user={user} can={can} onChange={loadSchedule} />}
         {activeTab === "coverage" && !empty &&
           <Coverage schedule={schedule} onChange={loadSchedule} />}
         {activeTab === "admin" && <Admin schedule={schedule} onChange={loadSchedule} />}
-        {activeTab === "create" && <Create onChange={loadSchedule} />}
+        {activeTab === "create" && <Create onChange={loadSchedule} can={can} />}
+        {activeTab === "roster" && <Roster />}
         {activeTab === "users" && <Users schedule={schedule} />}
         {activeTab === "insights" && <Insights can={can} />}
         {activeTab === "activity" && <Activity />}

@@ -10,7 +10,7 @@ const LEVELS = [
   { id: "night", label: "Night", cls: "night" },
 ];
 
-export default function Create({ onChange }) {
+export default function Create({ onChange, can }) {
   const [staff, setStaff] = useState([]);
   const [placeholder, setPlaceholder] = useState(false);
   const [codes, setCodes] = useState({ locations: {}, statuses: {} });
@@ -51,13 +51,28 @@ export default function Create({ onChange }) {
     } catch (e) { setStatus("Error: " + e.message); }
   }
 
+  // C1: auto-draft a fairness-aware schedule from the roster, loaded into the grid
+  // for editing (nothing is saved until you press “Create schedule”).
+  async function draft() {
+    if (!start || !end) { setStatus("Pick a start and end date first."); return; }
+    try {
+      const d = await api.generate(start, end);
+      setAssign(d.assignments || {});
+      const r = d.report || {};
+      const gaps = (r.unfilled || []).length;
+      setStatus(`Drafted ${r.assigned} assignments for ${r.people} people over ${r.days} days`
+        + (gaps ? `, ${gaps} slot(s) left unfilled — review & edit below.` : ". Review & edit, then Create."));
+    } catch (e) { setStatus("Error: " + e.message); }
+  }
+
   return (
     <div className="card">
       <h2>Create a schedule <span className="trial">preview</span></h2>
       {placeholder && (
         <p className="adaptive-note">
-          Using <strong>placeholder staff</strong>. Send the real roster (clinics
-          per person, career/per-diem, seniority, no-nights) and it’ll drop in here.
+          Using <strong>placeholder staff</strong>. Edit the real roster (clinics
+          per person, career/per-diem, seniority, no-nights) in the <strong>Roster</strong>
+          tab and it powers generation, qualification and validation here.
         </p>
       )}
 
@@ -131,6 +146,11 @@ export default function Create({ onChange }) {
       )}
 
       <div className="row" style={{ marginTop: 12 }}>
+        {(can?.("generate_schedule")) && (
+          <button className="primary" onClick={draft} disabled={!start || !end}>
+            ✨ Generate draft
+          </button>
+        )}
         <button onClick={create}>Create schedule</button>
         {status && <span className="status">{status}</span>}
       </div>

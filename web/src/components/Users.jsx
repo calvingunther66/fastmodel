@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api.js";
 
-const CAPS = ["upload", "manage_coverage", "manage_users", "view_leaderboard", "tune_scoring", "automate"];
-const TOKEN_CAPS = ["automate", "upload"];
+// Fallback if /api/capabilities can't be reached; the live list is preferred.
+const FALLBACK_CAPS = ["upload", "generate_schedule", "manage_roster", "manage_coverage",
+  "manage_swaps", "manage_users", "view_leaderboard", "tune_scoring", "export", "automate"];
+const TOKEN_CAPS = ["automate", "upload", "manage_roster"];
 
 export default function Users({ schedule }) {
   const [users, setUsers] = useState([]);
   const [names, setNames] = useState([]);
   const [err, setErr] = useState("");
+  const [CAPS, setCAPS] = useState(FALLBACK_CAPS);
+  const [presets, setPresets] = useState({});
   const [form, setForm] = useState({
     username: "", password: "", role: "member", person: "", capabilities: [],
   });
@@ -18,7 +22,13 @@ export default function Users({ schedule }) {
   useEffect(() => {
     refresh();
     api.people().then((p) => setNames(p.map((x) => x.name))).catch(() => setNames([]));
+    api.capabilities().then((c) => { setCAPS(c.capabilities || FALLBACK_CAPS); setPresets(c.presets || {}); }).catch(() => {});
   }, []);
+
+  function applyPreset(name) {
+    const add = presets[name] || [];
+    setForm((f) => ({ ...f, capabilities: [...new Set([...f.capabilities, ...add])] }));
+  }
 
   function toggleCap(list, c) {
     return list.includes(c) ? list.filter((x) => x !== c) : [...list, c];
@@ -86,6 +96,17 @@ export default function Users({ schedule }) {
             </label>
           ))}
         </div>
+        {form.role !== "admin" && Object.keys(presets).length > 0 && (
+          <div className="row gap presets">
+            <span className="muted">Presets:</span>
+            {Object.keys(presets).map((name) => (
+              <button type="button" key={name} className="ghost small"
+                title={presets[name].join(", ")} onClick={() => applyPreset(name)}>
+                + {name}
+              </button>
+            ))}
+          </div>
+        )}
         <button>Create account</button>
       </form>
 

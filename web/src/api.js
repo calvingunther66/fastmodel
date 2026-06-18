@@ -83,9 +83,48 @@ export const api = {
     req("/api/automation/ingest-latest", { method: "POST", body: "{}" }),
 
   roster: () => req("/api/roster"),
+  setRoster: (staff) =>
+    req("/api/roster", { method: "POST", body: JSON.stringify({ staff }) }),
   codes: () => req("/api/codes"),
+  capabilities: () => req("/api/capabilities"),
   createSchedule: (body) =>
     req("/api/schedule/create", { method: "POST", body: JSON.stringify(body) }),
+
+  // validator (A2/A3) + generator (C1) + templates (C3)
+  issues: () => req("/api/schedule/issues"),
+  generate: (start, end) =>
+    req("/api/schedule/generate", { method: "POST", body: JSON.stringify({ start, end }) }),
+  templates: () => req("/api/templates"),
+  saveTemplate: (name, weekday_levels) =>
+    req("/api/templates", { method: "POST", body: JSON.stringify({ name, weekday_levels }) }),
+  deleteTemplate: (name) =>
+    req(`/api/templates/${encodeURIComponent(name)}`, { method: "DELETE" }),
+
+  // member preferences (B4)
+  myPrefs: () => req("/api/me/prefs"),
+  setMyPrefs: (prefs) =>
+    req("/api/me/prefs", { method: "POST", body: JSON.stringify(prefs) }),
+
+  // open shifts + claims (B1)
+  openShifts: () => req("/api/open-shifts"),
+  claim: (name, date, shift_type) =>
+    req("/api/me/claim", { method: "POST", body: JSON.stringify({ name, date, shift_type }) }),
+  unclaim: (name, date, shift_type) =>
+    req("/api/me/claim/remove", { method: "POST", body: JSON.stringify({ name, date, shift_type }) }),
+  approveClaim: (name, date, shift_type, claimer) =>
+    req("/api/coverage/approve-claim", {
+      method: "POST", body: JSON.stringify({ name, date, shift_type, claimer }) }),
+
+  // what-if simulator (C2)
+  simulate: (name, date, shift_type) =>
+    req("/api/coverage/simulate", { method: "POST", body: JSON.stringify({ name, date, shift_type }) }),
+
+  // shift swaps (B3)
+  swaps: () => req("/api/swaps"),
+  proposeSwap: (body) => req("/api/me/swap", { method: "POST", body: JSON.stringify(body) }),
+  acceptSwap: (id) => req("/api/me/swap/accept", { method: "POST", body: JSON.stringify({ id }) }),
+  decideSwap: (id, decision) =>
+    req("/api/swaps/decide", { method: "POST", body: JSON.stringify({ id, decision }) }),
 
   async upload(file) {
     const fd = new FormData();
