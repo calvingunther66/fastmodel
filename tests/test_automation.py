@@ -60,8 +60,50 @@ def test_automation_ingest_latest(tmp_path):
     assert "2026-06-21..2026-06-22" in st["periods_ingested"]
 
 
+def _two_sheet_bytes():
+    wb = openpyxl.Workbook()
+    draft = wb.active
+    draft.title = "OLD-2June 21 - July 18, 26 (3)"
+    final = wb.create_sheet("June 21 - July 18, 26")
+    for ws in (draft, final):
+        ws.cell(2, 1, "DATE"); ws.cell(2, 2, 21); ws.cell(2, 3, 22)
+        ws.cell(4, 1, "DOE"); ws.cell(4, 2, "BC")
+    bio = io.BytesIO(); wb.save(bio); return bio.getvalue()
+
+
+def test_draft_sheet_detection():
+    from server.store import is_draft_sheet
+    assert is_draft_sheet("KH-2June 21 - July 18, 26 (5)")
+    assert is_draft_sheet("NEW-3June 21 - July 18, 26 (7)")
+    assert is_draft_sheet("June 21 - July 18, 26 (2)")
+    assert not is_draft_sheet("June 21 - July 18, 26")
+
+
+def test_inspect_and_sheet_override(tmp_path):
+    store = ScheduleStore(tmp_path)
+    inbox = tmp_path / "inbox"; inbox.mkdir()
+    auto = Automation(store, inbox=inbox)
+    (inbox / "s.xlsx").write_bytes(_two_sheet_bytes())
+
+    info = auto.inspect_latest()
+    assert info["status"] == "ok"
+    assert info["suggested_sheet"] == "June 21 - July 18, 26"   # not the draft
+    drafts = {s["name"]: s["draft"] for s in info["sheets"]}
+    assert drafts["OLD-2June 21 - July 18, 26 (3)"] is True
+    assert drafts["June 21 - July 18, 26"] is False
+
+    # First ingest (auto) records the hash...
+    auto.ingest_latest()
+    assert auto.ingest_latest()["status"] == "unchanged"
+    # ...but naming a sheet forces a re-parse so an agent can fix the tab.
+    fixed = auto.ingest_latest(sheet="June 21 - July 18, 26")
+    assert fixed["status"] in ("added", "updated")
+    assert fixed["sheet"] == "June 21 - July 18, 26"
+
+
 class _Auto:
     def list_spreadsheets(self): return [{"name": "x.xlsx"}]
+    def inspect_latest(self): return {"status": "ok", "suggested_sheet": "June"}
     def ingest_latest(self, **k): return {"status": "added"}
     def status(self): return {"inbox": "/data/inbox", "periods_ingested": []}
 
@@ -77,7 +119,8 @@ def test_mcp_handle():
     assert init["result"]["serverInfo"]["name"] == "fastmodel-scheduler"
 
     tools = mcp.handle({"id": 2, "method": "tools/list"}, a, s)["result"]["tools"]
-    assert {t["name"] for t in tools} == {"list_spreadsheets", "ingest_latest", "schedule_status"}
+    assert {t["name"] for t in tools} == {
+        "list_spreadsheets", "inspect_latest", "ingest_latest", "schedule_status"}
 
     call = mcp.handle({"id": 3, "method": "tools/call",
                        "params": {"name": "schedule_status"}}, a, s)

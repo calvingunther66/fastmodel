@@ -43,8 +43,12 @@ authenticated by the bearer token. Tools:
 | Tool | What it does |
 |------|--------------|
 | `list_spreadsheets` | inbox files, newest first |
+| `inspect_latest` | parse the newest file per tab **without** importing; returns people counts, date ranges, draft flags, and a `suggested_sheet` |
 | `ingest_latest` | ingest the newest (optional `sheet` arg); returns added/updated/unchanged |
 | `schedule_status` | active schedule + automation state |
+
+A ready-to-use **agent prompt** that drives these (inspect → pick the canonical
+tab → ingest → report) is in [`AGENT_PROMPT.md`](AGENT_PROMPT.md).
 
 Point an MCP client at it with an `Authorization: Bearer <token>` header. Quick
 check with curl:

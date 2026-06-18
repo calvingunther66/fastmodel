@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 import secrets
 import threading
 from pathlib import Path
@@ -26,6 +27,14 @@ from .config import DATA_DIR
 from .coverage import apply_overrides, find_open_shift
 
 _LEVEL_TO_TYPE = {"day": "day", "mid": "midshift", "night": "night"}
+
+# A sheet looks like a draft/working copy if it starts with a code like "KH-2",
+# "NEW-3", "OLD-3" or ends with a copy marker like "(2)".
+_DRAFT_RE = re.compile(r"^[A-Za-z]{1,5}-?\d|\(\d+\)\s*$")
+
+
+def is_draft_sheet(name: str) -> bool:
+    return bool(_DRAFT_RE.search(name or ""))
 
 
 class ScheduleStore:
@@ -57,9 +66,10 @@ class ScheduleStore:
         if sheet_name and sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
         else:
-            # Auto-pick by (named people, total shifts); on a tie prefer the
-            # right-most sheet, since final/clean versions tend to sit last.
-            best_score, ws = (-1, -1, -1), wb.worksheets[0]
+            # Auto-pick by (named people, total shifts, not-a-draft); on a tie
+            # prefer the right-most sheet (final versions tend to sit last) and
+            # de-prioritise obvious draft tabs (e.g. "KH-2…", "…(2)").
+            best_score, ws = (-1, -1, -1, -1), wb.worksheets[0]
             for index, cand in enumerate(wb.worksheets):
                 try:
                     parsed = extract_roster(cand)
@@ -67,7 +77,7 @@ class ScheduleStore:
                     total = sum(len(p["shifts"]) for p in parsed["people"])
                 except Exception:
                     named = total = -1
-                score = (named, total, index)
+                score = (named, total, 0 if is_draft_sheet(cand.title) else 1, index)
                 if score > best_score:
                     best_score, ws = score, cand
         result = extract_roster(ws)

@@ -20,6 +20,14 @@ TOOLS = [
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
+        "name": "inspect_latest",
+        "description": "Parse the newest inbox spreadsheet WITHOUT importing it, "
+                       "returning each tab's name, people count, date range and "
+                       "whether it looks like a draft, plus a suggested_sheet. Use "
+                       "this to choose the right tab before ingest_latest.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "ingest_latest",
         "description": "Ingest the newest spreadsheet from the inbox into the app. "
                        "Idempotent: reports 'unchanged', 'updated' (same period, new "
@@ -44,6 +52,8 @@ def _call_tool(name: str, args: dict, automation, store) -> dict:
     try:
         if name == "list_spreadsheets":
             payload = automation.list_spreadsheets()
+        elif name == "inspect_latest":
+            payload = automation.inspect_latest()
         elif name == "ingest_latest":
             payload = automation.ingest_latest(sheet=args.get("sheet"), actor="mcp")
         elif name == "schedule_status":

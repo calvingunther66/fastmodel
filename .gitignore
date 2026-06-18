@@ -19,5 +19,6 @@ data/
 # Docker env file with secrets (token, password) — keep .env.example only
 .env
 
-# Local automation inbox (synced spreadsheets) — never commit
-inbox/
+# Local automation inbox — ignore dropped spreadsheets, keep the README
+inbox/*
+!inbox/README.md

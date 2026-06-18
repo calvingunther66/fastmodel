@@ -68,6 +68,35 @@ class Automation:
             "last": s.get("last"),
         }
 
+    def inspect_latest(self) -> dict:
+        """Parse the newest file per sheet (without storing) so an agent can pick
+        the right tab before ingesting."""
+        path = self._latest_path()
+        if path is None:
+            return {"status": "empty", "detail": f"no spreadsheets in {self.inbox}"}
+        import openpyxl
+
+        from schedule_extractor.roster_extractor import extract_roster
+        from .store import is_draft_sheet
+
+        wb = openpyxl.load_workbook(path, data_only=True)
+        sheets, best = [], None
+        for ws in wb.worksheets:
+            try:
+                r = extract_roster(ws)
+                people = sum(1 for p in r["people"] if p.get("name"))
+                info = {"name": ws.title, "people": people,
+                        "date_range": r.get("date_range"),
+                        "draft": is_draft_sheet(ws.title)}
+            except Exception as exc:  # noqa: BLE001
+                info = {"name": ws.title, "people": 0, "error": str(exc), "draft": True}
+            sheets.append(info)
+            key = (info["people"], 0 if info["draft"] else 1)
+            if best is None or key > best[0]:
+                best = (key, ws.title)
+        return {"status": "ok", "file": path.name, "sheets": sheets,
+                "suggested_sheet": best[1] if best else None}
+
     # ---- the autonomous action -------------------------------------------
     def ingest_latest(self, *, sheet: str | None = None, actor: str = "automation") -> dict:
         path = self._latest_path()
@@ -78,7 +107,9 @@ class Automation:
         digest = hashlib.sha256(data).hexdigest()
         state = self._state()
 
-        if digest in state.get("seen_hashes", []):
+        # Skip re-ingesting an identical file — unless a specific sheet is named,
+        # so an agent can correct the tab after an auto-pick.
+        if digest in state.get("seen_hashes", []) and not sheet:
             return {"status": "unchanged", "file": path.name,
                     "detail": "this exact file was already ingested"}
 
@@ -86,7 +117,8 @@ class Automation:
         period = f"{result.get('date_range', {}).get('start')}..{result.get('date_range', {}).get('end')}"
         is_new_period = period not in state.get("periods", [])
 
-        state.setdefault("seen_hashes", []).append(digest)
+        if digest not in state.setdefault("seen_hashes", []):
+            state["seen_hashes"].append(digest)
         state["seen_hashes"] = state["seen_hashes"][-50:]  # keep recent
         if is_new_period:
             state.setdefault("periods", []).append(period)
