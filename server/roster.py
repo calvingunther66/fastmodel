@@ -57,6 +57,31 @@ class StaffRoster:
     def is_placeholder(self) -> bool:
         return self._read().get("placeholder", False)
 
+    def quals(self) -> dict:
+        """Map of UPPERCASED name -> qualification metadata, for the engine.
+
+        {NAME: {clinics: set[str], works_nights: bool, employment: str,
+                seniority: bool}}. Names are uppercased so they line up with the
+        schedule's (uppercase) person names.
+        """
+        out: dict[str, dict] = {}
+        for s in self.list():
+            name = str(s.get("name", "")).strip()
+            if not name:
+                continue
+            out[name.upper()] = {
+                "clinics": {str(c).upper() for c in (s.get("clinics") or [])},
+                "works_nights": bool(s.get("works_nights", True)),
+                "employment": s.get("employment", "career"),
+                "seniority": bool(s.get("seniority", False)),
+            }
+        return out
+
+    def engine_quals(self) -> dict | None:
+        """Quals for the coverage/validator engines, or None while placeholder so
+        the engines fall back to the history heuristic (nothing breaks pre-roster)."""
+        return None if self.is_placeholder() else self.quals()
+
     def replace(self, staff: list[dict]) -> list[dict]:
         clean = []
         for s in staff:

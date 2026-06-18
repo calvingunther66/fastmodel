@@ -7,12 +7,17 @@ Roles:
   admin   — can do everything (all capabilities implicitly).
   member  — self-service; may be granted individual capabilities by an admin.
 
-Capabilities (delegatable to members):
-  upload           — upload / re-parse schedules
-  manage_coverage  — mark anyone out, assign covers, run cascades
-  manage_users     — create / edit / delete accounts
-  view_leaderboard — see the step-up dashboard (Insights tab)
-  tune_scoring     — adjust the fairness-vs-competence weight
+Capabilities (delegatable to members, one by one or in small groups):
+  upload            — upload / re-parse schedules
+  generate_schedule — use the assisted generator + templates (Create tab)
+  manage_roster     — edit the staff roster (quals, nights, employment)
+  manage_coverage   — mark anyone out, assign covers, run cascades, approve claims
+  manage_swaps      — approve member shift swaps
+  manage_users      — create / edit / delete accounts
+  view_leaderboard  — see the step-up dashboard / equity board (Insights tab)
+  tune_scoring      — adjust the fairness-vs-competence weight
+  export            — download CSV / printable schedule exports
+  automate          — use the automation API / MCP endpoint
 """
 
 from __future__ import annotations
@@ -28,13 +33,26 @@ from pathlib import Path
 from .config import APP_PASSWORD, APP_USERNAME, DATA_DIR
 
 CAPABILITIES = [
-    "upload",            # upload / re-parse schedules
-    "manage_coverage",   # mark out, assign covers, run cascades
-    "manage_users",      # create / edit / delete accounts + API tokens
-    "view_leaderboard",  # see the step-up dashboard (Insights)
-    "tune_scoring",      # adjust the fairness-vs-competence weight
-    "automate",          # use the automation API / MCP endpoint (ingest schedules)
+    "upload",             # upload / re-parse schedules
+    "generate_schedule",  # assisted generator + templates (Create tab)
+    "manage_roster",      # edit the staff roster (quals, nights, employment)
+    "manage_coverage",    # mark out, assign covers, run cascades, approve claims
+    "manage_swaps",       # approve member shift swaps
+    "manage_users",       # create / edit / delete accounts + API tokens
+    "view_leaderboard",   # see the step-up dashboard / equity board (Insights)
+    "tune_scoring",       # adjust the fairness-vs-competence weight
+    "export",             # download CSV / printable schedule exports
+    "automate",           # use the automation API / MCP endpoint (ingest schedules)
 ]
+
+# Convenience bundles the Users UI offers as one-click presets. Granting is still
+# per-capability under the hood; these just select a small group at once.
+CAPABILITY_PRESETS = {
+    "Coordinator": ["manage_coverage", "manage_swaps"],
+    "Scheduler": ["upload", "generate_schedule", "manage_roster"],
+    "Analyst": ["view_leaderboard", "tune_scoring", "export"],
+    "Automation": ["automate"],
+}
 ROLES = ["admin", "member"]
 
 

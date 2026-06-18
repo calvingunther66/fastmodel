@@ -45,10 +45,34 @@ TOOLS = [
                        "state (inbox path, periods ingested, last run).",
         "inputSchema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "validate_latest",
+        "description": "Run the schedule validator on the active schedule and return "
+                       "any problems (unqualified assignments, no-nights violations, "
+                       "double-bookings, understaffed days, fatigue) with a summary. "
+                       "Use after ingest_latest to report issues in the new month.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "coverage_plan",
+        "description": "Draft a ranked coverage plan for an open shift WITHOUT changing "
+                       "anything (read-only). Returns free/move/cascade candidates with "
+                       "explanations, for an admin to review and approve.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "person who is out"},
+                "date": {"type": "string", "description": "ISO date YYYY-MM-DD"},
+                "shift_type": {"type": "string", "description": "day | midshift | night"},
+            },
+            "required": ["name", "date", "shift_type"],
+        },
+    },
 ]
 
 
-def _call_tool(name: str, args: dict, automation, store) -> dict:
+def _call_tool(name: str, args: dict, automation, store, services) -> dict:
+    services = services or {}
     try:
         if name == "list_spreadsheets":
             payload = automation.list_spreadsheets()
@@ -64,6 +88,15 @@ def _call_tool(name: str, args: dict, automation, store) -> dict:
                 "people": len([p for p in sched.get("people", []) if p.get("name")]),
                 "automation": automation.status(),
             }
+        elif name == "validate_latest":
+            fn = services.get("validate")
+            payload = fn() if fn else {"error": "validation unavailable"}
+        elif name == "coverage_plan":
+            fn = services.get("coverage_plan")
+            if not fn:
+                payload = {"error": "coverage planning unavailable"}
+            else:
+                payload = fn(args.get("name"), args.get("date"), args.get("shift_type"))
         else:
             return {"content": [{"type": "text", "text": f"unknown tool: {name}"}],
                     "isError": True}
@@ -72,7 +105,7 @@ def _call_tool(name: str, args: dict, automation, store) -> dict:
         return {"content": [{"type": "text", "text": f"error: {exc}"}], "isError": True}
 
 
-def handle(req: dict, automation, store, on_tool=None):
+def handle(req: dict, automation, store, on_tool=None, services=None):
     """Handle one JSON-RPC message. Returns a response dict, or None for notifications."""
     method = req.get("method")
     rid = req.get("id")
@@ -95,7 +128,7 @@ def handle(req: dict, automation, store, on_tool=None):
         args = params.get("arguments") or {}
         if on_tool:
             on_tool(name, args)
-        result = _call_tool(name, args, automation, store)
+        result = _call_tool(name, args, automation, store, services)
     else:
         return {"jsonrpc": "2.0", "id": rid,
                 "error": {"code": -32601, "message": f"method not found: {method}"}}

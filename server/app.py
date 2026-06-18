@@ -21,14 +21,16 @@ from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import config, mcp
-from .accounts import AccountStore, has_cap, public_view
+from .accounts import CAPABILITIES, CAPABILITY_PRESETS, AccountStore, has_cap, public_view
 from .apitokens import ApiTokenStore
 from .audit import AuditLog
 from .automation import Automation
 from .coverage import propose as propose_coverage
+from .generator import generate as generate_schedule_draft
 from .ical import build_ics
 from .roster import StaffRoster
 from .store import ScheduleStore
+from .validate import summarize, validate_schedule
 
 app = FastAPI(title="fastmodel schedule")
 app.add_middleware(
@@ -184,6 +186,16 @@ def get_roster(user: dict = Depends(require_auth)):
     return {"staff": roster.list(), "placeholder": roster.is_placeholder()}
 
 
+@app.post("/api/roster")
+def set_roster(payload: dict, user: dict = Depends(require_cap("manage_roster"))):
+    staff = payload.get("staff")
+    if not isinstance(staff, list):
+        raise HTTPException(status_code=400, detail="staff must be a list")
+    saved = roster.replace(staff)
+    audit.log(user["username"], "roster_update", {"people": len(saved)})
+    return {"staff": saved, "placeholder": roster.is_placeholder()}
+
+
 @app.get("/api/codes")
 def get_codes(user: dict = Depends(require_auth)):
     from schedule_extractor.definitions import CLINICS, LOCATIONS, STATUS
@@ -201,6 +213,39 @@ def create_schedule(payload: dict, user: dict = Depends(require_cap("upload"))):
               {"title": title, "people": len([p for p in result["people"] if p["shifts"]])})
     return {"title": title,
             "people": len([p for p in result["people"] if p["shifts"]])}
+
+
+@app.get("/api/capabilities")
+def list_capabilities(user: dict = Depends(require_auth)):
+    """The delegatable capabilities and the one-click presets, for the Users UI."""
+    return {"capabilities": CAPABILITIES, "presets": CAPABILITY_PRESETS}
+
+
+@app.get("/api/schedule/issues")
+def schedule_issues(user: dict = Depends(require_auth)):
+    """Validator/linter results for the active schedule (A2/A3)."""
+    schedule = store.get_schedule()
+    if not schedule:
+        return {"issues": [], "summary": summarize([])}
+    issues = validate_schedule(schedule, roster=roster.engine_quals(),
+                               prefs=store.list_prefs())
+    return {"issues": issues, "summary": summarize(issues)}
+
+
+@app.post("/api/schedule/generate")
+def schedule_generate(payload: dict, user: dict = Depends(require_cap("generate_schedule"))):
+    """Draft a schedule (does not persist) — the admin edits it in Create then saves."""
+    start, end = payload.get("start"), payload.get("end")
+    if not (start and end):
+        raise HTTPException(status_code=400, detail="start and end dates are required")
+    quals = roster.quals()  # generator needs quals; placeholder is fine for a draft
+    if not quals:
+        raise HTTPException(status_code=400, detail="no staff roster to generate from")
+    draft = generate_schedule_draft(start, end, quals, prefs=store.list_prefs(),
+                                    stats=store.aggregated_stats())
+    audit.log(user["username"], "generate_draft",
+              {"start": start, "end": end, "people": draft["report"]["people"]})
+    return draft
 
 
 @app.post("/api/schedule/reparse")
@@ -230,7 +275,8 @@ def _propose(name, date, shift_type):
     return propose_coverage(schedule, name, date, shift_type,
                             offered=store.offers_for_date(date),
                             stats=store.aggregated_stats(),
-                            fairness_weight=store.get_fairness_weight())
+                            fairness_weight=store.get_fairness_weight(),
+                            roster=roster.engine_quals())
 
 
 @app.get("/api/coverage/callouts")
@@ -385,6 +431,181 @@ def set_contact(payload: dict, user: dict = Depends(require_cap("manage_coverage
     return {"ok": True}
 
 
+# ---- member preferences (B4) ---------------------------------------------
+@app.get("/api/me/prefs")
+def get_my_prefs(user: dict = Depends(require_auth)):
+    return store.get_prefs(_own_person(user))
+
+
+@app.post("/api/me/prefs")
+def set_my_prefs(payload: dict, user: dict = Depends(require_auth)):
+    person = _own_person(user)
+    saved = store.set_prefs(person, payload or {})
+    audit.log(user["username"], "set_prefs", {"person": person})
+    return saved
+
+
+# ---- open shifts + claims (B1) -------------------------------------------
+def _eligible_to_cover(person: str, co: dict) -> tuple[bool, str]:
+    """Is `person` plausibly able to cover this open call-out? (roster-aware)."""
+    quals = roster.engine_quals()
+    code = (co.get("code") or "").upper()
+    if quals is not None:
+        meta = quals.get(person.upper())
+        if meta is None:
+            return False, "not on the roster"
+        if co["shift_type"] == "night" and not meta.get("works_nights", True):
+            return False, "doesn’t work nights"
+        if meta.get("clinics") and code and code not in meta["clinics"]:
+            return False, f"not qualified for {code}"
+    return True, "eligible"
+
+
+@app.get("/api/open-shifts")
+def open_shifts(user: dict = Depends(require_auth)):
+    """Call-outs that still need a cover, with this user's eligibility + claim state."""
+    person = user.get("person")
+    out = []
+    for co in store.list_callouts():
+        if co.get("covered_by"):
+            continue
+        row = {"name": co["name"], "date": co["date"], "shift_type": co["shift_type"],
+               "code": co.get("code"), "reason": co.get("reason"),
+               "claimers": store.claims_for(co["name"], co["date"], co["shift_type"])}
+        if person:
+            ok, why = _eligible_to_cover(person, co)
+            row["eligible"] = ok and person != co["name"]
+            row["eligibility"] = why
+            row["claimed_by_me"] = person in row["claimers"]
+        out.append(row)
+    return out
+
+
+@app.post("/api/me/claim")
+def claim_open_shift(payload: dict, user: dict = Depends(require_auth)):
+    person = _own_person(user)
+    name, date, shift_type = _coverage_target(payload)
+    store.add_claim(person, name, date, shift_type)
+    audit.log(user["username"], "claim_shift",
+              {"claimer": person, "name": name, "date": date, "shift": shift_type})
+    return {"ok": True}
+
+
+@app.post("/api/me/claim/remove")
+def unclaim_open_shift(payload: dict, user: dict = Depends(require_auth)):
+    person = _own_person(user)
+    name, date, shift_type = _coverage_target(payload)
+    store.remove_claim(person, name, date, shift_type)
+    return {"ok": True}
+
+
+@app.post("/api/coverage/approve-claim")
+def approve_claim(payload: dict, user: dict = Depends(require_cap("manage_coverage"))):
+    name, date, shift_type = _coverage_target(payload)
+    claimer = payload.get("claimer")
+    if not claimer:
+        raise HTTPException(status_code=400, detail="claimer is required")
+    store.assign_cover(name, date, shift_type, claimer)
+    store.remove_claim(claimer, name, date, shift_type)
+    audit.log(user["username"], "approve_claim",
+              {"name": name, "date": date, "shift": shift_type, "claimer": claimer})
+    return {"ok": True, "covered_by": claimer}
+
+
+# ---- what-if simulator (C2) ----------------------------------------------
+@app.post("/api/coverage/simulate")
+def simulate(payload: dict, user: dict = Depends(require_cap("manage_coverage"))):
+    """Preview the impact of marking someone out, without persisting anything."""
+    name, date, shift_type = _coverage_target(payload)
+    proposal = _propose(name, date, shift_type)
+    issues = validate_schedule(store.get_schedule() or {}, roster=roster.engine_quals(),
+                               prefs=store.list_prefs())
+    return {"proposal": proposal, "issues": issues, "summary": summarize(issues)}
+
+
+# ---- shift swaps (B3) -----------------------------------------------------
+@app.get("/api/swaps")
+def list_swaps(user: dict = Depends(require_auth)):
+    return store.list_swaps()
+
+
+@app.post("/api/me/swap")
+def propose_swap(payload: dict, user: dict = Depends(require_auth)):
+    person = _own_person(user)
+    need = ("a_date", "a_type", "b_person", "b_date", "b_type")
+    if not all(payload.get(k) for k in need):
+        raise HTTPException(status_code=400, detail=f"required: {', '.join(need)}")
+    sw = store.propose_swap(person, payload["a_date"], payload["a_type"],
+                            payload["b_person"], payload["b_date"], payload["b_type"])
+    audit.log(user["username"], "propose_swap", {"id": sw["id"], "with": payload["b_person"]})
+    return sw
+
+
+@app.post("/api/me/swap/accept")
+def accept_swap(payload: dict, user: dict = Depends(require_auth)):
+    person = _own_person(user)
+    sw = store.list_swaps()
+    target = next((s for s in sw if s["id"] == payload.get("id")), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="no such swap")
+    if target["b_person"] != person:
+        raise HTTPException(status_code=403, detail="only the other party can accept")
+    updated = store.set_swap_status(target["id"], "accepted")
+    audit.log(user["username"], "accept_swap", {"id": target["id"]})
+    return updated
+
+
+@app.post("/api/swaps/decide")
+def decide_swap(payload: dict, user: dict = Depends(require_cap("manage_swaps"))):
+    swap_id, decision = payload.get("id"), payload.get("decision")
+    if decision not in ("approved", "rejected"):
+        raise HTTPException(status_code=400, detail="decision must be approved|rejected")
+    updated = store.set_swap_status(swap_id, decision)
+    if not updated:
+        raise HTTPException(status_code=404, detail="no such swap")
+    audit.log(user["username"], "decide_swap", {"id": swap_id, "decision": decision})
+    return updated
+
+
+# ---- builder templates (C3) ----------------------------------------------
+@app.get("/api/templates")
+def list_templates(user: dict = Depends(require_cap("generate_schedule"))):
+    return store.list_templates()
+
+
+@app.post("/api/templates")
+def save_template(payload: dict, user: dict = Depends(require_cap("generate_schedule"))):
+    name = (payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    return store.save_template(name, payload.get("weekday_levels") or {})
+
+
+@app.delete("/api/templates/{name}")
+def delete_template(name: str, user: dict = Depends(require_cap("generate_schedule"))):
+    store.delete_template(name)
+    return {"ok": True}
+
+
+# ---- exports (D2) ---------------------------------------------------------
+@app.get("/api/export/schedule.csv")
+def export_schedule_csv(user: dict = Depends(require_cap("export"))):
+    from .exports import schedule_csv
+    csv_text = schedule_csv(store.get_schedule() or {})
+    return Response(content=csv_text, media_type="text/csv",
+                    headers={"Content-Disposition": 'attachment; filename="schedule.csv"'})
+
+
+@app.get("/api/export/person/{name}.csv")
+def export_person_csv(name: str, user: dict = Depends(require_auth)):
+    from .exports import person_csv
+    csv_text = person_csv(store.get_schedule() or {}, name)
+    if csv_text is None:
+        raise HTTPException(status_code=404, detail="no such person")
+    return Response(content=csv_text, media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="{name}.csv"'})
+
+
 # --------------------------------------------------------------------------
 # user management (requires 'manage_users')
 # --------------------------------------------------------------------------
@@ -511,8 +732,17 @@ async def claude_mcp(request: Request):
     def _tool_audit(name, args):
         audit.log(user["username"], "mcp_tool", {"tool": name, "args": args})
 
+    def _validate_active():
+        schedule = store.get_schedule() or {}
+        issues = validate_schedule(schedule, roster=roster.engine_quals(),
+                                   prefs=store.list_prefs())
+        return {"issues": issues, "summary": summarize(issues),
+                "active_sheet": schedule.get("parsed_sheet")}
+
+    services = {"validate": _validate_active, "coverage_plan": _propose}
+
     def _one(msg):
-        return mcp.handle(msg, automation, store, on_tool=_tool_audit)
+        return mcp.handle(msg, automation, store, on_tool=_tool_audit, services=services)
 
     if isinstance(body, list):  # JSON-RPC batch
         responses = [r for r in (_one(m) for m in body) if r is not None]
@@ -524,6 +754,21 @@ async def claude_mcp(request: Request):
 
 
 # --------------------------------------------------------------------------
+# health check (no auth) — for uptime monitoring / automated backups (E3)
+# --------------------------------------------------------------------------
+@app.get("/healthz")
+def healthz():
+    schedule = store.get_raw_schedule()
+    return {
+        "ok": True,
+        "has_schedule": schedule is not None,
+        "active_sheet": (schedule or {}).get("parsed_sheet"),
+        "uploaded_at": (schedule or {}).get("uploaded_at"),
+        "people": len([p for p in (schedule or {}).get("people", []) if p.get("name")]),
+    }
+
+
+# --------------------------------------------------------------------------
 # public calendar feed (no auth — the token IS the secret)
 # --------------------------------------------------------------------------
 @app.get("/calendar/{token}.ics")
@@ -531,7 +776,9 @@ def calendar(token: str):
     person = store.person_by_token(token)
     if person is None:
         raise HTTPException(status_code=404, detail="unknown calendar")
-    ics = build_ics(person["name"], person.get("shifts", []), config.TIMEZONE)
+    reminder = int(store.get_prefs(person["name"]).get("reminder_minutes") or 0)
+    ics = build_ics(person["name"], person.get("shifts", []), config.TIMEZONE,
+                    reminder_minutes=reminder)
     return Response(
         content=ics,
         media_type="text/calendar; charset=utf-8",

@@ -10,7 +10,7 @@ from __future__ import annotations
 import datetime as dt
 from zoneinfo import ZoneInfo
 
-from icalendar import Calendar, Event
+from icalendar import Alarm, Calendar, Event
 
 
 def _hm(value: str) -> tuple[int, int]:
@@ -18,7 +18,8 @@ def _hm(value: str) -> tuple[int, int]:
     return int(h), int(m)
 
 
-def build_ics(person_name: str, shifts: list[dict], tz_name: str) -> bytes:
+def build_ics(person_name: str, shifts: list[dict], tz_name: str,
+              reminder_minutes: int = 0) -> bytes:
     tz = ZoneInfo(tz_name)
     now = dt.datetime.now(tz)
 
@@ -53,6 +54,17 @@ def build_ics(person_name: str, shifts: list[dict], tz_name: str) -> bytes:
             ev.add("dtstart", start_dt)
             ev.add("dtend", end_dt)
             ev.add("summary", f"{label} ({shift_type})")
+            # A real location helps phones group/colour shifts (D3).
+            if meaning and s.get("category") == "location":
+                ev.add("location", meaning)
+            ev.add("categories", [shift_type or "shift"])
+            # Optional reminder before a timed shift (per-person preference).
+            if reminder_minutes and reminder_minutes > 0:
+                alarm = Alarm()
+                alarm.add("action", "DISPLAY")
+                alarm.add("description", f"{label} ({shift_type})")
+                alarm.add("trigger", dt.timedelta(minutes=-reminder_minutes))
+                ev.add_component(alarm)
         else:
             # All-day marker (vacation, holiday, request, available, …)
             ev.add("dtstart", day)

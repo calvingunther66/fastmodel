@@ -120,7 +120,8 @@ def test_mcp_handle():
 
     tools = mcp.handle({"id": 2, "method": "tools/list"}, a, s)["result"]["tools"]
     assert {t["name"] for t in tools} == {
-        "list_spreadsheets", "inspect_latest", "ingest_latest", "schedule_status"}
+        "list_spreadsheets", "inspect_latest", "ingest_latest", "schedule_status",
+        "validate_latest", "coverage_plan"}
 
     call = mcp.handle({"id": 3, "method": "tools/call",
                        "params": {"name": "schedule_status"}}, a, s)

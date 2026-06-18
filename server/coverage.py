@@ -115,6 +115,12 @@ def _adaptive_bonus(cand, open_code, shift_type, stats, cover_avg, reasons,
         if nights:
             bonus += round(min(10, nights) * comp_mult)
             reasons.append(f"works nights regularly ({nights}× on record)")
+    # learned affinity: people who have actually covered this location before are a
+    # proven fit (the system gets smarter from real assignments — A4).
+    covered_loc = covers.get("by_code", {}).get(open_code, 0)
+    if covered_loc:
+        bonus += round(min(8, covered_loc * 2) * comp_mult)
+        reasons.append(f"has covered {open_code} before ({covered_loc}×)")
 
     # --- fairness / load balancing ---
     stepped = covers.get("count", 0)
@@ -138,8 +144,28 @@ def _adaptive_bonus(cand, open_code, shift_type, stats, cover_avg, reasons,
 
 
 
+def _meta(roster, name):
+    """Roster qualification metadata for a person, or None (use history)."""
+    if not roster:
+        return None
+    return roster.get((name or "").upper())
+
+
+def _qualified_for(open_code, prof, meta) -> bool:
+    """True if the person is qualified for the open location.
+
+    Prefers the real roster's clinic list when available; otherwise falls back to
+    the history heuristic (has worked the location before)."""
+    if not open_code:
+        return False
+    if meta is not None and meta.get("clinics"):
+        return open_code in meta["clinics"]
+    return open_code in prof["codes"]
+
+
 def _free_candidates(schedule, date, code, shift_type, exclude, profiles,
-                     offered=frozenset(), stats=None, cover_avg=0.0, fairness_weight=0.5):
+                     offered=frozenset(), stats=None, cover_avg=0.0, fairness_weight=0.5,
+                     roster=None):
     """Ranked people who are free/available to take a (date, code, shift_type) shift."""
     open_code = (code or "").upper()
     meaning = decode(code)["meaning"] if code else None
@@ -150,10 +176,14 @@ def _free_candidates(schedule, date, code, shift_type, exclude, profiles,
         if not cand or cand in exclude:
             continue
         prof = profiles.get(cand, {"codes": set(), "nights": False})
+        meta = _meta(roster, cand)
+        # Hard rule: never put a no-nights person on a night shift (when we know).
+        if is_night and meta is not None and not meta.get("works_nights", True):
+            continue
         state, _ = _day_state(_entries_on(p, date))
         if state not in ("available", "free"):
             continue
-        qualified = open_code in prof["codes"] if open_code else False
+        qualified = _qualified_for(open_code, prof, meta)
         reasons, score = [], 0
         if cand in offered:
             score += 30
@@ -164,26 +194,36 @@ def _free_candidates(schedule, date, code, shift_type, exclude, profiles,
         else:
             score += 20
             reasons.append("nothing scheduled that day")
+        roster_qual = meta is not None and meta.get("clinics")
         if qualified:
             score += 25
-            reasons.append(f"has worked {meaning or open_code} before")
+            reasons.append(f"qualified for {meaning or open_code}"
+                           if roster_qual else f"has worked {meaning or open_code} before")
         elif open_code:
-            reasons.append(f"no record of working {meaning or open_code}")
+            reasons.append(f"not qualified for {meaning or open_code}"
+                           if roster_qual else f"no record of working {meaning or open_code}")
         if is_night:
-            if prof["nights"]:
+            night_ok = meta.get("works_nights", True) if meta is not None else prof["nights"]
+            if night_ok:
                 score += 10
                 reasons.append("works night shifts")
-            else:
+            elif meta is None:
                 score -= 5
                 reasons.append("no record of night shifts")
+        if meta is not None and meta.get("employment") == "per_diem":
+            score += 5  # per-diem staff are the flex pool — lean on them first
+            reasons.append("per-diem (flex pool)")
         bonus, fairness = _adaptive_bonus(cand, open_code, shift_type, stats,
                                           cover_avg, reasons, fairness_weight)
         score += bonus
 
         avail = ("on the on-call pool" if state == "available"
                  else ("offered to cover that day" if cand in offered else "free that day"))
-        comp = (f"has worked {meaning or open_code} before" if qualified
-                else f"hasn’t worked {meaning or open_code} before")
+        loc = meaning or open_code
+        if roster_qual:
+            comp = f"is qualified for {loc}" if qualified else f"is not qualified for {loc}"
+        else:
+            comp = f"has worked {loc} before" if qualified else f"hasn’t worked {loc} before"
         explanation = f"{cand} is {avail} and {comp}."
         if fairness:
             explanation += f" {cand} {fairness}"
@@ -197,20 +237,24 @@ def _free_candidates(schedule, date, code, shift_type, exclude, profiles,
 
 
 def _move_candidates(schedule, date, code, shift_type, exclude, profiles,
-                     stats=None, cover_avg=0.0, fairness_weight=0.5):
+                     stats=None, cover_avg=0.0, fairness_weight=0.5, roster=None):
     """Ranked people working a reassignable shift who are qualified for the open one."""
     open_code = (code or "").upper()
     meaning = decode(code)["meaning"] if code else None
+    is_night = shift_type == "night"
     out = []
     for p in schedule.get("people", []):
         cand = p.get("name")
         if not cand or cand in exclude:
             continue
         prof = profiles.get(cand, {"codes": set(), "nights": False})
+        meta = _meta(roster, cand)
+        if is_night and meta is not None and not meta.get("works_nights", True):
+            continue  # hard rule: no-nights person never moved onto a night
         state, detail = _day_state(_entries_on(p, date))
         if state != "working":
             continue
-        if open_code not in prof["codes"]:
+        if not _qualified_for(open_code, prof, meta):
             continue  # only move people qualified for the open shift
         cur_code = detail.get("code", "").upper()
         cur_type = detail.get("shift_type")
@@ -239,7 +283,7 @@ def _move_candidates(schedule, date, code, shift_type, exclude, profiles,
 
 
 def _cascades(schedule, sick_name, date, open_code, open_type, moves, profiles,
-              stats=None, cover_avg=0.0, fairness_weight=0.5):
+              stats=None, cover_avg=0.0, fairness_weight=0.5, roster=None):
     """For each move candidate, find a free backfill for their vacated slot."""
     open_meaning = decode(open_code)["meaning"] if open_code else open_code
     cascades = []
@@ -248,7 +292,7 @@ def _cascades(schedule, sick_name, date, open_code, open_type, moves, profiles,
         backfills = _free_candidates(
             schedule, date, frm["code"], frm["shift_type"],
             exclude={sick_name, m["name"]}, profiles=profiles, stats=stats,
-            cover_avg=cover_avg, fairness_weight=fairness_weight,
+            cover_avg=cover_avg, fairness_weight=fairness_weight, roster=roster,
         )
         if not backfills:
             continue
@@ -272,12 +316,15 @@ def _cascades(schedule, sick_name, date, open_code, open_type, moves, profiles,
 
 
 def propose(schedule: dict, name: str, date: str, shift_type: str,
-            offered=frozenset(), stats=None, fairness_weight=0.5) -> dict:
+            offered=frozenset(), stats=None, fairness_weight=0.5, roster=None) -> dict:
     """Return coverage proposals for the open shift (name, date, shift_type).
 
     `offered` is the set of people who have declared they can cover that date.
     `stats` (optional) is accumulated work/cover history that makes scoring adaptive.
     `fairness_weight` (0..1) dials competence vs load-balancing.
+    `roster` (optional) is {NAME: {clinics, works_nights, employment, seniority}} from
+    the real staff roster; when present it drives qualification and a hard no-nights
+    rule, otherwise the engine falls back to the work-history heuristic.
     """
     open_shift = find_open_shift(schedule, name, date, shift_type)
     open_code = (open_shift or {}).get("code", "") or ""
@@ -287,11 +334,11 @@ def propose(schedule: dict, name: str, date: str, shift_type: str,
     cover_avg = _cover_average(schedule, stats)
     exclude = {name}
     free = _free_candidates(schedule, date, open_code, shift_type, exclude, profiles,
-                            offered, stats, cover_avg, fairness_weight)
+                            offered, stats, cover_avg, fairness_weight, roster)
     moves = _move_candidates(schedule, date, open_code, shift_type, exclude, profiles,
-                             stats, cover_avg, fairness_weight)
+                             stats, cover_avg, fairness_weight, roster)
     cascades = _cascades(schedule, name, date, open_code.upper(), shift_type, moves,
-                         profiles, stats, cover_avg, fairness_weight)
+                         profiles, stats, cover_avg, fairness_weight, roster)
 
     return {
         "open_shift": {
@@ -305,6 +352,32 @@ def propose(schedule: dict, name: str, date: str, shift_type: str,
         "move_candidates": moves[:8],
         "cascades": cascades[:5],
     }
+
+
+def _move_shift(by_name, frm, date, shift_type, to):
+    """Move a worked shift from one person to another (for swaps)."""
+    src, dst = by_name.get(frm), by_name.get(to)
+    if not src or not dst:
+        return
+    for s in list(src["shifts"]):
+        if (s["date"] == date and s["shift_type"] == shift_type
+                and s.get("category") == "location"):
+            src["shifts"].remove(s)
+            moved = {**s, "swapped_from": frm}
+            dst["shifts"].append(moved)
+            dst["shifts"].sort(key=lambda x: (x["date"], x["shift_type"]))
+            return
+
+
+def apply_swaps(schedule: dict, swaps: list[dict]) -> dict:
+    """Apply approved swaps in place: each party takes the other's shift."""
+    by_name = {p["name"]: p for p in schedule.get("people", []) if p.get("name")}
+    for sw in swaps or []:
+        if sw.get("status") != "approved":
+            continue
+        _move_shift(by_name, sw["a_person"], sw["a_date"], sw["a_type"], sw["b_person"])
+        _move_shift(by_name, sw["b_person"], sw["b_date"], sw["b_type"], sw["a_person"])
+    return schedule
 
 
 def apply_overrides(schedule: dict, callouts: list[dict]) -> dict:

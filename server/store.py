@@ -24,7 +24,7 @@ from schedule_extractor.definitions import decode, shift_window
 from schedule_extractor.roster_extractor import extract_roster
 
 from .config import DATA_DIR
-from .coverage import apply_overrides, find_open_shift
+from .coverage import apply_overrides, apply_swaps, find_open_shift
 
 _LEVEL_TO_TYPE = {"day": "day", "mid": "midshift", "night": "night"}
 
@@ -48,6 +48,9 @@ class ScheduleStore:
         self.offers_path = data_dir / "availability.json"
         self.stats_path = data_dir / "stats.json"
         self.settings_path = data_dir / "settings.json"
+        self.prefs_path = data_dir / "prefs.json"
+        self.swaps_path = data_dir / "swaps.json"
+        self.templates_path = data_dir / "templates.json"
         self._lock = threading.Lock()
 
     # ---- low-level json helpers ------------------------------------------
@@ -161,6 +164,7 @@ class ScheduleStore:
         if base is None:
             return None
         sched = apply_overrides(base, self._callouts())  # deep-copies even if empty
+        apply_swaps(sched, self._swaps())                 # approved swaps move shifts
         contacts = self._contacts()
         if contacts:
             for p in sched.get("people", []):
@@ -200,6 +204,109 @@ class ScheduleStore:
 
     def offers_for_date(self, date: str) -> set[str]:
         return {o["person"] for o in self._offers() if o["date"] == date}
+
+    # ---- member availability preferences (B4) ----------------------------
+    def _prefs(self) -> dict:
+        return self._read_json(self.prefs_path, {})
+
+    def list_prefs(self) -> dict:
+        return self._prefs()
+
+    def get_prefs(self, person: str) -> dict:
+        return self._prefs().get(person, {})
+
+    def set_prefs(self, person: str, prefs: dict) -> dict:
+        clean = {
+            "no_weekdays": sorted({int(d) for d in (prefs.get("no_weekdays") or [])
+                                   if str(d).isdigit() and 0 <= int(d) <= 6}),
+            "prefer_nights": bool(prefs.get("prefer_nights")),
+            "max_consecutive": int(prefs.get("max_consecutive") or 0),
+            "reminder_minutes": int(prefs.get("reminder_minutes") or 0),
+            "note": str(prefs.get("note") or "").strip(),
+        }
+        with self._lock:
+            data = self._prefs()
+            data[person] = clean
+            self._write_json(self.prefs_path, data)
+        return clean
+
+    # ---- open-shift claims (B1) ------------------------------------------
+    def _claims(self) -> list[dict]:
+        return self._read_json(self.overrides_path, {}).get("claims", [])
+
+    def list_claims(self) -> list[dict]:
+        return self._claims()
+
+    def add_claim(self, claimer: str, name: str, date: str, shift_type: str) -> None:
+        with self._lock:
+            data = self._read_json(self.overrides_path, {})
+            claims = data.get("claims", [])
+            if not any(c["claimer"] == claimer and self._same(c, name, date, shift_type)
+                       for c in claims):
+                claims.append({"claimer": claimer, "name": name, "date": date,
+                               "shift_type": shift_type})
+            data["claims"] = claims
+            self._write_json(self.overrides_path, data)
+
+    def remove_claim(self, claimer: str, name: str, date: str, shift_type: str) -> None:
+        with self._lock:
+            data = self._read_json(self.overrides_path, {})
+            data["claims"] = [c for c in data.get("claims", [])
+                              if not (c["claimer"] == claimer
+                                      and self._same(c, name, date, shift_type))]
+            self._write_json(self.overrides_path, data)
+
+    def claims_for(self, name: str, date: str, shift_type: str) -> list[str]:
+        return [c["claimer"] for c in self._claims()
+                if self._same(c, name, date, shift_type)]
+
+    # ---- shift swaps (B3) -------------------------------------------------
+    def _swaps(self) -> list[dict]:
+        return self._read_json(self.swaps_path, {}).get("swaps", [])
+
+    def list_swaps(self) -> list[dict]:
+        return self._swaps()
+
+    def propose_swap(self, a_person, a_date, a_type, b_person, b_date, b_type) -> dict:
+        sw = {
+            "id": secrets.token_hex(6), "status": "proposed",
+            "a_person": a_person, "a_date": a_date, "a_type": a_type,
+            "b_person": b_person, "b_date": b_date, "b_type": b_type,
+        }
+        with self._lock:
+            swaps = self._swaps()
+            swaps.append(sw)
+            self._write_json(self.swaps_path, {"swaps": swaps})
+        return sw
+
+    def set_swap_status(self, swap_id: str, status: str) -> dict | None:
+        with self._lock:
+            swaps = self._swaps()
+            found = None
+            for sw in swaps:
+                if sw["id"] == swap_id:
+                    sw["status"] = status
+                    found = sw
+                    break
+            self._write_json(self.swaps_path, {"swaps": swaps})
+            return found
+
+    # ---- builder templates (C3) ------------------------------------------
+    def list_templates(self) -> dict:
+        return self._read_json(self.templates_path, {})
+
+    def save_template(self, name: str, weekday_levels: dict) -> dict:
+        with self._lock:
+            data = self.list_templates()
+            data[name] = weekday_levels
+            self._write_json(self.templates_path, data)
+        return {name: weekday_levels}
+
+    def delete_template(self, name: str) -> None:
+        with self._lock:
+            data = self.list_templates()
+            data.pop(name, None)
+            self._write_json(self.templates_path, data)
 
     # ---- adaptive stats: work frequency + cover step-ups -----------------
     def _stats(self) -> dict:
@@ -264,10 +371,42 @@ class ScheduleStore:
             "periods": len(stats.get("work_by_period", {})),
         }
 
+    def _equity(self) -> dict:
+        """Per-person nights/weekends/holidays/hours from the active schedule (D1).
+
+        History stats keep only counts (no dates), so the weekend/hours breakdown is
+        computed from the current period's schedule, which retains dates + times."""
+        from .validate import shift_hours  # local import avoids a cycle
+        sched = self.get_raw_schedule() or {}
+        out: dict[str, dict] = {}
+        for p in sched.get("people", []):
+            name = p.get("name")
+            if not name:
+                continue
+            nights = weekends = holidays = 0
+            hours = 0.0
+            for s in p.get("shifts", []):
+                if (s.get("code") or "").upper() == "H":
+                    holidays += 1
+                if s.get("category") != "location":
+                    continue
+                hours += shift_hours(s)
+                if s.get("shift_type") == "night":
+                    nights += 1
+                try:
+                    if dt.date.fromisoformat(s["date"]).weekday() >= 5:
+                        weekends += 1
+                except (ValueError, KeyError, TypeError):
+                    pass
+            out[name] = {"nights": nights, "weekends": weekends,
+                         "holidays": holidays, "hours": round(hours, 1)}
+        return out
+
     def leaderboard(self) -> dict:
-        """Per-person insights ranked by who has stepped up to cover the most."""
+        """Per-person insights: cover step-ups plus an equity breakdown (D1)."""
         agg = self.aggregated_stats()
         covers, work = agg["covers"], agg["work"]
+        equity = self._equity()
         names = set(covers) | set(work)
         # Include everyone currently on the schedule, even with zero history.
         sched = self.get_raw_schedule() or {}
@@ -276,6 +415,7 @@ class ScheduleStore:
         for n in sorted(names):
             c = covers.get(n, {})
             w = work.get(n, {})
+            eq = equity.get(n, {})
             rows.append({
                 "name": n,
                 "covers": c.get("count", 0),
@@ -283,6 +423,10 @@ class ScheduleStore:
                 "covers_by_code": c.get("by_code", {}),
                 "worked_total": w.get("total", 0),
                 "worked_by_code": w.get("by_code", {}),
+                "nights": eq.get("nights", 0),
+                "weekends": eq.get("weekends", 0),
+                "holidays": eq.get("holidays", 0),
+                "hours": eq.get("hours", 0.0),
             })
         rows.sort(key=lambda r: (-r["covers"], -r["worked_total"], r["name"]))
         return {"periods": agg["periods"], "people": rows}
