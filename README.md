@@ -5,6 +5,7 @@
 >
 > | Doc | Purpose |
 > |-----|---------|
+> | [`PI_SETUP.md`](PI_SETUP.md) | **Full Pi setup & handoff** — whole-project context + clean-Pi-to-live steps |
 > | [`CLAUDE.md`](CLAUDE.md) | Project overview, repo map, quick start (read first) |
 > | [`docs/SCHEDULE_FORMAT.md`](docs/SCHEDULE_FORMAT.md) | The schedule's layout, every code, every shift time (domain knowledge) |
 > | [`docs/ACCOUNTS.md`](docs/ACCOUNTS.md) | Accounts, roles & capabilities, member self-service |

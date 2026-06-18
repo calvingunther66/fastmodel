@@ -27,6 +27,7 @@ Two layers:
 
 | Doc | What's in it |
 |-----|--------------|
+| **`PI_SETUP.md`** | **Full Pi setup & handoff guide** — the whole-project story (current + past work) plus exact clean-Pi-to-live steps, first-run config, automation, backups, troubleshooting. Hand this to whoever sets up the Pi. |
 | **`docs/SCHEDULE_FORMAT.md`** | **The domain knowledge** — exact workbook layout, every shift code, every shift time, colours, availability rules. Most of this came from the schedule owner and is NOT derivable from the code. Start here to understand *why* the parser does what it does. |
 | **`docs/ACCOUNTS.md`** | Accounts, roles & capabilities, member self-service, and where it lives in code. |
 | **`docs/AUTOMATION.md`** | Agent ingestion: API tokens, the inbox, the `/claude-mcp` MCP endpoint, scheduling, and the security model. |
