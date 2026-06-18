@@ -101,6 +101,23 @@ reasoning, and what's still open. Useful when resuming with no chat history.
   the grid already greys those cells), drive "qualified for X" in coverage from real
   quals instead of inferred history, and respect seniority/per-diem rules.
 
+### Automation & agent (MCP) access
+- **Reframed "backdoor" as a secure, scoped automation interface** — explicitly not
+  a hidden/auth-bypassing path. Headless access uses **API tokens** (`server/
+  apitokens.py`, `data/api_tokens.json`): random `sk_sched_…` secrets stored only as
+  SHA-256 hashes, scoped to capabilities, revocable, shown once, audit-logged.
+- **New `automate` capability** gates the automation routes and the MCP endpoint.
+- **Inbox + idempotent ingest** (`server/automation.py`): the newest `.xlsx` in
+  `INBOX_DIR` is ingested with change detection (`unchanged`/`updated`/`added`),
+  state in `data/automation_state.json`. Sync method (Drive/rclone/scp) is the
+  owner's choice; we just watch the folder.
+- **MCP endpoint** `/claude-mcp` (`server/mcp.py`): minimal JSON-RPC server exposing
+  `list_spreadsheets`, `ingest_latest`, `schedule_status` so a scheduled Claude
+  routine can drive ingestion. Three run modes: MCP agent, REST+cron, or the
+  built-in `AUTO_INGEST` scheduler. All over the HTTPS tunnel. See `docs/AUTOMATION.md`.
+- The inbox is a Docker bind-mount (`INBOX_HOST:/inbox`) so files synced on the host
+  are visible to the container.
+
 ## Open items / future work
 
 - **Clinic split (morning/afternoon)** detection via a coloured center bar is

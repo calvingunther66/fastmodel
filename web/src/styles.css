@@ -216,6 +216,15 @@ button.ghost.small { padding: 2px 8px; font-size: 0.78rem; }
 .cell-select { width: 100%; border: none; background: transparent; font-size: 0.72rem; color: var(--muted); padding: 0; }
 td.cell-block { background: #f8fafc; }
 td.cell-block .cell-select { color: #cbd5e1; }
+
+/* automation + tokens */
+.auto-panel { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 12px; }
+.auto-stats { list-style: none; padding: 0; margin: 8px 0; font-size: 0.85rem; }
+.auto-stats li { display: flex; gap: 10px; padding: 3px 0; }
+.auto-stats li span:first-child { color: var(--muted); min-width: 150px; }
+.tokens { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 12px; }
+.token-fresh { background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-size: 0.82rem; }
+.token-fresh code { display: block; margin-top: 4px; word-break: break-all; color: #065f46; }
 .callout-list li {
   display: grid;
   grid-template-columns: 1fr 1fr 1.4fr auto;

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api.js";
 
-const CAPS = ["upload", "manage_coverage", "manage_users"];
+const CAPS = ["upload", "manage_coverage", "manage_users", "view_leaderboard", "tune_scoring", "automate"];
+const TOKEN_CAPS = ["automate", "upload"];
 
 export default function Users({ schedule }) {
   const [users, setUsers] = useState([]);
@@ -131,6 +132,74 @@ export default function Users({ schedule }) {
           ))}
         </tbody>
       </table>
+
+      <ApiTokens />
+    </div>
+  );
+}
+
+function ApiTokens() {
+  const [tokens, setTokens] = useState([]);
+  const [name, setName] = useState("");
+  const [caps, setCaps] = useState(["automate"]);
+  const [fresh, setFresh] = useState(null);
+  const [err, setErr] = useState("");
+
+  function refresh() { api.tokens().then(setTokens).catch((e) => setErr(e.message)); }
+  useEffect(() => { refresh(); }, []);
+
+  async function create(e) {
+    e.preventDefault();
+    setErr(""); setFresh(null);
+    try {
+      const r = await api.createToken(name || "agent", caps);
+      setFresh(r.token); setName(""); refresh();
+    } catch (e2) { setErr(e2.message); }
+  }
+  async function revoke(id) {
+    if (!confirm("Revoke this token? Any agent using it loses access.")) return;
+    await api.revokeToken(id); refresh();
+  }
+
+  return (
+    <div className="tokens">
+      <h3>Automation API tokens</h3>
+      <p className="muted">
+        Bearer keys for headless agents (the Claude MCP routine). Scoped, revocable,
+        and audit-logged. The secret is shown once — copy it now.
+      </p>
+      {err && <div className="error">{err}</div>}
+      {fresh && (
+        <div className="token-fresh">
+          New token (copy now, it won’t be shown again):
+          <code>{fresh}</code>
+        </div>
+      )}
+      <form className="user-form" onSubmit={create}>
+        <input placeholder="token name (e.g. claude-agent)" value={name}
+          onChange={(e) => setName(e.target.value)} />
+        <div className="caps">
+          {TOKEN_CAPS.map((c) => (
+            <label key={c}>
+              <input type="checkbox" checked={caps.includes(c)}
+                onChange={() => setCaps(caps.includes(c) ? caps.filter((x) => x !== c) : [...caps, c])} />
+              {c}
+            </label>
+          ))}
+        </div>
+        <button>Mint token</button>
+      </form>
+      <ul className="callout-list">
+        {tokens.map((t) => (
+          <li key={t.id}>
+            <span className="who">{t.name}</span>
+            <span className="when">{(t.capabilities || []).join(", ")}</span>
+            <span className="muted">{t.last_used ? `used ${new Date(t.last_used).toLocaleString()}` : "never used"}</span>
+            <button className="ghost small danger" onClick={() => revoke(t.id)}>revoke</button>
+          </li>
+        ))}
+        {tokens.length === 0 && <li className="muted">No tokens.</li>}
+      </ul>
     </div>
   );
 }

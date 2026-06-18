@@ -15,10 +15,15 @@ services:
       TIMEZONE: ${TIMEZONE:-America/Los_Angeles}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://scheduler.calvingunther.com}
       SESSION_HTTPS_ONLY: "true"
+      # --- automation (optional) ---
+      INBOX_DIR: /inbox                       # where the latest .xlsx is picked up
+      AUTO_INGEST: ${AUTO_INGEST:-off}        # off | daily | weekly | <seconds>
       # --- cloudflared ---
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
     volumes:
       - schedule-data:/data
+      # Sync your Excel files into this host folder; the app ingests the newest.
+      - ${INBOX_HOST:-./inbox}:/inbox
     # No published ports needed: cloudflared dials out to Cloudflare and reaches
     # the server over localhost inside the container. Uncomment to also expose
     # the app on the LAN for testing:

@@ -20,9 +20,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import config
+from . import config, mcp
 from .accounts import AccountStore, has_cap, public_view
+from .apitokens import ApiTokenStore
 from .audit import AuditLog
+from .automation import Automation
 from .coverage import propose as propose_coverage
 from .ical import build_ics
 from .roster import StaffRoster
@@ -40,6 +42,8 @@ store = ScheduleStore()
 accounts = AccountStore()
 audit = AuditLog()
 roster = StaffRoster()
+api_tokens = ApiTokenStore()
+automation = Automation(store)
 DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 
 
@@ -60,6 +64,10 @@ class Credentials(BaseModel):
 
 
 def current_user(request: Request) -> dict | None:
+    # An API bearer token authenticates as a scoped service principal.
+    authz = request.headers.get("Authorization", "")
+    if authz.startswith("Bearer "):
+        return api_tokens.verify(authz[7:].strip())
     uname = request.session.get("user")
     return accounts.get(uname) if uname else None
 
@@ -441,6 +449,81 @@ def get_audit(limit: int = 200, user: dict = Depends(require_oversight)):
 
 
 # --------------------------------------------------------------------------
+# API tokens for automation (manage_users mints; tokens carry their own scope)
+# --------------------------------------------------------------------------
+@app.get("/api/tokens")
+def list_tokens(user: dict = Depends(require_cap("manage_users"))):
+    return api_tokens.list()
+
+
+@app.post("/api/tokens")
+def create_token(payload: dict, user: dict = Depends(require_cap("manage_users"))):
+    name = payload.get("name", "agent")
+    caps = payload.get("capabilities") or ["automate"]
+    record, secret = api_tokens.create(name, caps)
+    audit.log(user["username"], "token_create", {"name": record["name"], "caps": record["capabilities"]})
+    # The secret is returned exactly once.
+    return {**record, "token": secret}
+
+
+@app.delete("/api/tokens/{token_id}")
+def revoke_token(token_id: str, user: dict = Depends(require_cap("manage_users"))):
+    api_tokens.revoke(token_id)
+    audit.log(user["username"], "token_revoke", {"id": token_id})
+    return {"ok": True}
+
+
+# --------------------------------------------------------------------------
+# automation: watch an inbox of spreadsheets and ingest the latest
+# --------------------------------------------------------------------------
+@app.get("/api/automation/status")
+def automation_status(user: dict = Depends(require_cap("automate"))):
+    return automation.status()
+
+
+@app.get("/api/automation/spreadsheets")
+def automation_spreadsheets(user: dict = Depends(require_cap("automate"))):
+    return automation.list_spreadsheets()
+
+
+@app.post("/api/automation/ingest-latest")
+def automation_ingest_latest(payload: dict | None = None,
+                             user: dict = Depends(require_cap("automate"))):
+    result = automation.ingest_latest(sheet=(payload or {}).get("sheet"),
+                                      actor=user["username"])
+    audit.log(user["username"], "auto_ingest", result)
+    return result
+
+
+# --------------------------------------------------------------------------
+# MCP endpoint: agent-driven automation over JSON-RPC (bearer 'automate')
+# --------------------------------------------------------------------------
+@app.post("/claude-mcp")
+async def claude_mcp(request: Request):
+    user = current_user(request)
+    if not user or not has_cap(user, "automate"):
+        raise HTTPException(status_code=401, detail="bearer token with 'automate' required")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid JSON")
+
+    def _tool_audit(name, args):
+        audit.log(user["username"], "mcp_tool", {"tool": name, "args": args})
+
+    def _one(msg):
+        return mcp.handle(msg, automation, store, on_tool=_tool_audit)
+
+    if isinstance(body, list):  # JSON-RPC batch
+        responses = [r for r in (_one(m) for m in body) if r is not None]
+        return JSONResponse(responses if responses else [], status_code=200)
+    response = _one(body)
+    if response is None:  # a notification
+        return Response(status_code=202)
+    return JSONResponse(response)
+
+
+# --------------------------------------------------------------------------
 # public calendar feed (no auth — the token IS the secret)
 # --------------------------------------------------------------------------
 @app.get("/calendar/{token}.ics")
@@ -454,6 +537,35 @@ def calendar(token: str):
         media_type="text/calendar; charset=utf-8",
         headers={"Content-Disposition": f'inline; filename="{token}.ics"'},
     )
+
+
+# --------------------------------------------------------------------------
+# optional built-in scheduler (env AUTO_INGEST = daily | weekly | <seconds>)
+# --------------------------------------------------------------------------
+def _auto_interval() -> int | None:
+    v = config.AUTO_INGEST
+    if v in ("", "off", "0", "false", "no"):
+        return None
+    return {"daily": 86400, "weekly": 604800}.get(v, int(v) if v.isdigit() else None)
+
+
+@app.on_event("startup")
+async def _start_scheduler():
+    interval = _auto_interval()
+    if not interval:
+        return
+    import asyncio
+
+    async def _loop():
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                result = automation.ingest_latest(actor="scheduler")
+                audit.log("scheduler", "auto_ingest", result)
+            except Exception as exc:  # noqa: BLE001
+                audit.log("scheduler", "auto_ingest_error", {"error": str(exc)})
+
+    asyncio.create_task(_loop())
 
 
 # --------------------------------------------------------------------------

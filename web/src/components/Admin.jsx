@@ -1,11 +1,27 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
 
 export default function Admin({ schedule, onChange }) {
   const fileRef = useRef();
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [auto, setAuto] = useState(null);
   const sheets = schedule?.available_sheets || [];
+
+  useEffect(() => {
+    api.automationStatus().then(setAuto).catch(() => setAuto(null));
+  }, [schedule]);
+
+  async function ingestLatest() {
+    setBusy(true); setStatus("");
+    try {
+      const r = await api.automationIngestLatest();
+      setStatus(`Automation: ${r.status}${r.file ? ` — ${r.file}` : ""}${r.period ? ` (${r.period})` : ""}.`);
+      api.automationStatus().then(setAuto).catch(() => {});
+      onChange();
+    } catch (e) { setStatus("Error: " + e.message); }
+    finally { setBusy(false); }
+  }
 
   async function upload() {
     const file = fileRef.current.files[0];
@@ -68,6 +84,26 @@ export default function Admin({ schedule, onChange }) {
       )}
 
       {status && <div className="status">{status}</div>}
+
+      {auto && (
+        <div className="auto-panel">
+          <h3>Autonomous ingestion</h3>
+          <p className="muted">
+            Drop/sync your Excel files into the inbox and the latest is ingested
+            (idempotently). An agent can do this on a schedule via the MCP endpoint.
+          </p>
+          <ul className="auto-stats">
+            <li><span>Inbox</span><code>{auto.inbox}</code></li>
+            <li><span>Spreadsheets waiting</span><strong>{auto.spreadsheets}</strong></li>
+            <li><span>Periods ingested</span><strong>{(auto.periods_ingested || []).length}</strong></li>
+            {auto.last && <li><span>Last run</span>
+              <span>{auto.last.status} · {auto.last.file} · {new Date(auto.last.at).toLocaleString()}</span></li>}
+          </ul>
+          <button className="ghost" disabled={busy} onClick={ingestLatest}>
+            Ingest latest now
+          </button>
+        </div>
+      )}
     </div>
   );
 }

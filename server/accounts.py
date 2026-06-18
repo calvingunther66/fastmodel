@@ -30,9 +30,10 @@ from .config import APP_PASSWORD, APP_USERNAME, DATA_DIR
 CAPABILITIES = [
     "upload",            # upload / re-parse schedules
     "manage_coverage",   # mark out, assign covers, run cascades
-    "manage_users",      # create / edit / delete accounts
+    "manage_users",      # create / edit / delete accounts + API tokens
     "view_leaderboard",  # see the step-up dashboard (Insights)
     "tune_scoring",      # adjust the fairness-vs-competence weight
+    "automate",          # use the automation API / MCP endpoint (ingest schedules)
 ]
 ROLES = ["admin", "member"]
 

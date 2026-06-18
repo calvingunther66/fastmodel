@@ -71,6 +71,17 @@ export const api = {
     }),
   clearCallout: (name, date, shift_type) =>
     req("/api/coverage/clear", { method: "POST", body: JSON.stringify({ name, date, shift_type }) }),
+  // API tokens (manage_users)
+  tokens: () => req("/api/tokens"),
+  createToken: (name, capabilities) =>
+    req("/api/tokens", { method: "POST", body: JSON.stringify({ name, capabilities }) }),
+  revokeToken: (id) => req(`/api/tokens/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  // automation
+  automationStatus: () => req("/api/automation/status"),
+  automationSpreadsheets: () => req("/api/automation/spreadsheets"),
+  automationIngestLatest: () =>
+    req("/api/automation/ingest-latest", { method: "POST", body: "{}" }),
+
   roster: () => req("/api/roster"),
   codes: () => req("/api/codes"),
   createSchedule: (body) =>

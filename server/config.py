@@ -29,6 +29,13 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 TIMEZONE = os.environ.get("TIMEZONE", "America/Los_Angeles")
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
 
+# Where the automation looks for spreadsheets to ingest (sync your .xlsx here).
+INBOX_DIR = Path(os.environ.get("INBOX_DIR", str(DATA_DIR / "inbox"))).resolve()
+INBOX_DIR.mkdir(parents=True, exist_ok=True)
+
+# Optional built-in scheduler: "off" (default), "daily", "weekly", or seconds.
+AUTO_INGEST = os.environ.get("AUTO_INGEST", "off").strip().lower()
+
 # Mark the session cookie Secure (HTTPS-only). Turn on when served over HTTPS,
 # e.g. behind a Cloudflare tunnel: SESSION_HTTPS_ONLY=true
 SESSION_HTTPS_ONLY = os.environ.get("SESSION_HTTPS_ONLY", "false").lower() in (

@@ -29,6 +29,7 @@ Two layers:
 |-----|--------------|
 | **`docs/SCHEDULE_FORMAT.md`** | **The domain knowledge** — exact workbook layout, every shift code, every shift time, colours, availability rules. Most of this came from the schedule owner and is NOT derivable from the code. Start here to understand *why* the parser does what it does. |
 | **`docs/ACCOUNTS.md`** | Accounts, roles & capabilities, member self-service, and where it lives in code. |
+| **`docs/AUTOMATION.md`** | Agent ingestion: API tokens, the inbox, the `/claude-mcp` MCP endpoint, scheduling, and the security model. |
 | **`docs/DECISIONS.md`** | Decisions made with the owner, rationale, and the list of **open items / future work**. |
 | **`DOCKER.md`** | **Primary deploy:** single container bundling the app + cloudflared tunnel, exposed at `scheduler.calvingunther.com` (no open ports). Includes data persistence + backup. |
 | **`DEPLOY_QUICKSTART.md`** | Alternative bare-metal Pi deploy (venv + systemd + Caddy). |
@@ -52,6 +53,9 @@ schedule_extractor/        Python parser
 server/                    FastAPI app (serves API + built React app)
   app.py                   routes: auth, /api/*, self-service, /calendar/<token>.ics, SPA
   accounts.py              AccountStore: users.json, PBKDF2 hashing, roles + capabilities
+  apitokens.py             ApiTokenStore: hashed bearer tokens for agent access
+  automation.py            inbox watch + idempotent "ingest latest" (added/updated/unchanged)
+  mcp.py                   minimal MCP JSON-RPC server (tools) for the agent endpoint
   roster.py                StaffRoster: roster.json (placeholder staff + attributes)
   store.py                 ScheduleStore: upload/parse/persist + tokens + call-outs +
                              availability offers + contact overrides + adaptive stats
