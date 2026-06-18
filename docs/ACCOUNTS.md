@@ -27,18 +27,28 @@ it can't be deleted or demoted, and you change its password by changing
 | **admin** | everything (all capabilities implicitly) |
 | **member** | self-service, plus any capabilities an admin grants |
 
-Capabilities an admin can toggle per member (delegation):
+Capabilities an admin can toggle per member (delegation) — one by one, or in
+small groups via the one-click **presets**:
 
 | Capability | Grants |
 |------------|--------|
 | `upload` | upload / re-parse schedules |
-| `manage_coverage` | mark anyone out, assign covers, run cascades, edit any contact |
-| `manage_users` | create / edit / delete accounts |
-| `view_leaderboard` | see the step-up dashboard (Insights tab) |
+| `generate_schedule` | the assisted generator + builder templates (Create tab) |
+| `manage_roster` | edit the staff roster (clinics, nights, employment) — Roster tab |
+| `manage_coverage` | mark anyone out, assign covers, run cascades, approve claims, edit any contact |
+| `manage_swaps` | approve member shift swaps |
+| `manage_users` | create / edit / delete accounts + mint API tokens |
+| `view_leaderboard` | see the step-up / equity dashboard (Insights tab) |
 | `tune_scoring` | adjust the fairness-vs-competence scoring dial |
+| `export` | download CSV / printable schedule exports |
+| `automate` | use the automation API + `/claude-mcp` endpoint |
 
-`view_leaderboard` and `tune_scoring` are independent: you can give someone the
-dashboard without the dial, or the dial without the dashboard.
+Each is independent (e.g. `view_leaderboard` and `tune_scoring` can be granted
+separately). **Presets** in the Users screen select a small group at once:
+*Coordinator* (`manage_coverage` + `manage_swaps`), *Scheduler* (`upload` +
+`generate_schedule` + `manage_roster`), *Analyst* (`view_leaderboard` +
+`tune_scoring` + `export`), *Automation* (`automate`). The live list comes from
+`GET /api/capabilities`.
 
 A member with, say, `manage_coverage` becomes a coverage coordinator without
 being a full admin.

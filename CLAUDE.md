@@ -57,24 +57,28 @@ server/                    FastAPI app (serves API + built React app)
   apitokens.py             ApiTokenStore: hashed bearer tokens for agent access
   automation.py            inbox watch + idempotent "ingest latest" (added/updated/unchanged)
   mcp.py                   minimal MCP JSON-RPC server (tools) for the agent endpoint
-  roster.py                StaffRoster: roster.json (placeholder staff + attributes)
+  roster.py                StaffRoster: roster.json + quals()/engine_quals() (A1)
   store.py                 ScheduleStore: upload/parse/persist + tokens + call-outs +
-                             availability offers + contact overrides + adaptive stats
-  coverage.py              cover-suggestion engine (free/move/cascade), adaptive scoring
+                             offers + contacts + stats + prefs + claims + swaps + templates
+  coverage.py              cover-suggestion engine (free/move/cascade), roster-aware +
+                             adaptive scoring; apply_overrides / apply_swaps
+  validate.py              ★ schedule validator + fatigue checks (A2/A3)
+  generator.py             ★ assisted fairness-aware schedule generator (C1)
+  exports.py               CSV exports (D2)
   audit.py                 AuditLog: append-only activity log (audit.jsonl)
-  ical.py                  build_ics(): shifts -> VCALENDAR
+  ical.py                  build_ics(): shifts -> VCALENDAR (+ reminders/location, D3)
   config.py                env-var config + persistent SECRET_KEY
   __main__.py              `python -m server` (uvicorn)
   requirements.txt         server-only deps
 
 web/                       React + Vite frontend (built to web/dist)
-  src/App.jsx              shell: login + role-aware tabs
-  src/components/          Login, ScheduleGrid, MyCalendar, MyAvailability,
-                             Coverage, Admin (upload), Create (builder), Users,
-                             Insights, Activity
+  src/App.jsx              shell: login + capability-gated tabs
+  src/components/          Login, ScheduleGrid, MyCalendar, MyAvailability (prefs+swaps),
+                             OpenShifts, Coverage, Admin (upload+issues), Create (builder
+                             +generator), Roster, Users, Insights (equity), Activity
   src/api.js, utils.js     fetch wrapper, date/colour helpers
 
-tests/                     pytest (10 tests) — run with `python -m pytest`
+tests/                     pytest (52 tests) — run with `python -m pytest`
 tools/make_sample.py       generate a synthetic workbook for the generic layout
 docs/                      detailed documentation (see table above)
 

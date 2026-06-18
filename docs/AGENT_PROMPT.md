@@ -27,6 +27,8 @@ Tools available (via the connected MCP server):
                       and a `suggested_sheet`
 - ingest_latest     — import the newest file (optional `sheet` argument); returns
                       a `status` of added | updated | unchanged | empty
+- validate_latest   — after importing, list problems in the new schedule
+                      (unqualified, no-nights, double-booking, understaffed, fatigue)
 
 Do this each run:
 
@@ -51,7 +53,12 @@ Do this each run:
        • unchanged → the newest file was already imported; nothing to do.
        • empty     → nothing in the inbox.
 
-5. If any tool returns an error (a result with "error" or isError), do NOT retry
+5. If the status was "added" or "updated", call validate_latest and append a short
+   line to your report: either "no issues" or the count by severity plus the first
+   few messages (e.g. "2 errors: CORTES unqualified for BC on 7/3; …"). This is
+   advisory — still report the import as successful.
+
+6. If any tool returns an error (a result with "error" or isError), do NOT retry
    blindly. Report the file name and the exact error so a human can look. Common
    cases: a corrupt/locked file, or a tab whose layout couldn't be parsed.
 

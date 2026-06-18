@@ -117,6 +117,40 @@ reasoning, and what's still open. Useful when resuming with no chat history.
   built-in `AUTO_INGEST` scheduler. All over the HTTPS tunnel. See `docs/AUTOMATION.md`.
 - The inbox is a Docker bind-mount (`INBOX_HOST:/inbox`) so files synced on the host
   are visible to the container.
+- **New MCP tools** `validate_latest` (runs the validator on the active schedule) and
+  `coverage_plan` (read-only ranked cover plan), injected into `mcp.handle` via a
+  `services` dict so the module stays decoupled from the app.
+
+### Big adaptive feature batch (per-feature delegatable)
+A large batch was added to make the system more adaptive, with **granular
+capabilities** so each feature delegates one by one or in small groups (presets:
+Coordinator / Scheduler / Analyst / Automation). Notifications were deliberately
+**sidelined** for now. Highlights (all additive; default behaviour unchanged when the
+roster is still placeholder):
+- **Roster-aware engine (A1)** — the real roster's `clinics` drive qualification and
+  `works_nights` is a **hard block** on night assignments; per-diem is favoured as the
+  flex pool. Falls back to the work-history heuristic while the roster is placeholder.
+  `roster.engine_quals()` → `coverage.propose(roster=…)`. Editable in the **Roster** tab.
+- **Validator + fatigue (A2/A3, `server/validate.py`)** — flags unqualified,
+  no-nights, double-booking, understaffed (opt-in minimums), unknown codes (ignores
+  `*`/`UL`), plus fatigue (consecutive days, short rest, weekly hours). Shown in the
+  Upload tab and exposed at `/api/schedule/issues` + the `validate_latest` MCP tool.
+  Tuned against the real workbook: minimums **off by default** (it's availability-
+  oriented), so no false "understaffed" spam.
+- **Learned affinity (A4)** — people who have actually covered a location get a small
+  competence boost (uses existing cover-by-code data).
+- **Generator (C1, `server/generator.py`)** — greedy, fairness-aware drafting honouring
+  quals/no-nights/prefs/coverage goals; returns `create_schedule`-shaped assignments
+  loaded into the Create grid for editing (nothing saved until "Create"). What-if
+  **simulate** (C2) and builder **templates** (C3) added too.
+- **Open-shift claims (B1)** — members claim shifts they're eligible for; coordinators
+  approve (`assign_cover`). **Shift swaps (B3)** — propose → accept → `manage_swaps`
+  approves, applied via `coverage.apply_swaps`. **Member preferences (B4)** —
+  avoid-days, prefer-nights, calendar-reminder; feed coverage, generator, validator, ICS.
+- **Equity dashboard (D1)** — leaderboard gains nights/weekends/holidays/hours.
+  **CSV exports (D2, `server/exports.py`)**. **ICS niceties (D3)** — VALARM reminders,
+  LOCATION, categories.
+- **Ops** — `/healthz` (E3). Login lockout / 2FA (F) noted but not in this batch.
 
 ## Open items / future work
 
@@ -144,7 +178,11 @@ reasoning, and what's still open. Useful when resuming with no chat history.
   call-outs). Lives in `server/coverage.py` + `web/src/components/Coverage.jsx`;
   overrides are stored in `data/overrides.json`. Possible next steps: deeper
   (3+ step) chains, honouring the `R`/note availability hints, and an "undo".
-- **Not built:** CSV export; pushing events directly into Google Calendar.
+- **Now built** (see "Big adaptive feature batch" above): CSV export, an open-shift
+  "who can cover" view (member claims + approve), shift swaps, the schedule generator,
+  the validator, and member preferences. **Still not built:** push events directly
+  into Google Calendar; notifications (email/push) — deliberately sidelined; the
+  security items (login lockout, admin 2FA, member password-reset flow).
 - **HTTPS is required** for Apple/Google calendar subscriptions — see `SERVER.md`
   (Caddy snippet). Remember to set `PUBLIC_BASE_URL` to the https domain so the
   generated `.ics` links are correct.

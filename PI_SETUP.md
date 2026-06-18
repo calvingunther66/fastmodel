@@ -128,14 +128,28 @@ do anything with this section — it's context.
 
   | Capability | Grants |
   |------------|--------|
-  | `upload` | upload / re-parse schedules; use the Create builder |
-  | `manage_coverage` | mark anyone out, assign covers, run cascades, edit any contact |
+  | `upload` | upload / re-parse schedules; the Create builder |
+  | `generate_schedule` | the assisted generator + builder templates |
+  | `manage_roster` | edit the staff roster (Roster tab) — clinics, nights, employment |
+  | `manage_coverage` | mark anyone out, assign covers, cascades, approve claims, edit any contact |
+  | `manage_swaps` | approve member shift swaps |
   | `manage_users` | create / edit / delete accounts; mint API tokens |
-  | `view_leaderboard` | see the step-up dashboard (Insights tab) |
+  | `view_leaderboard` | the step-up / equity dashboard (Insights tab) |
   | `tune_scoring` | move the fairness-vs-competence dial |
+  | `export` | download CSV / printable schedule exports |
   | `automate` | use the automation API + the `/claude-mcp` endpoint |
 
-  `view_leaderboard` and `tune_scoring` are independent on purpose.
+  Each is independent and delegatable one by one. The **Users** screen also offers
+  one-click **presets** (Coordinator / Scheduler / Analyst / Automation) that select a
+  small group of caps at once. The live list comes from `GET /api/capabilities`.
+
+  **What's new since the first handoff** (a big adaptive batch — notifications
+  sidelined): a roster-aware coverage engine (real quals + hard no-nights rule), a
+  schedule **validator** (Upload tab issues panel + `validate_latest` MCP tool), a
+  fairness-aware schedule **generator** (Create → ✨ Generate draft), **open-shift
+  claims** + **shift swaps** + **member preferences** (avoid-days / prefer-nights /
+  calendar reminders), an **equity** dashboard (nights/weekends/hours), **CSV export**,
+  ICS reminders, and a `/healthz` endpoint. See `docs/DECISIONS.md`.
 
 ### A.4 Architecture at a glance
 
