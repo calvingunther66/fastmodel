@@ -310,3 +310,15 @@ textarea { width: 100%; max-width: 420px; border: 1px solid var(--line); border-
 .open-shifts h2 { margin-bottom: 4px; }
 button.small { font-size: 0.72rem; padding: 2px 8px; }
 button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* security: 2FA enrollment + password reset (F1/F2/F3) */
+button.link-btn { background: none; border: none; color: var(--accent); padding: 6px 0; cursor: pointer; font-size: 0.85rem; }
+button.link-btn:hover { text-decoration: underline; }
+.sec-status { margin: 12px 0; }
+.on-pill { color: #15803d; }
+.off-pill { color: #b91c1c; }
+.ok-banner { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; }
+.enroll { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; max-width: 420px; }
+.enroll-secret code { font-size: 1.1rem; letter-spacing: 2px; background: var(--panel, #f5f5f5); padding: 8px 12px; border-radius: 6px; display: inline-block; }
+code.break { word-break: break-all; font-size: 0.72rem; display: block; margin-top: 6px; }
+.muted.small, span.small { font-size: 0.78rem; }

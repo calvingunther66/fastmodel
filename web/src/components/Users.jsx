@@ -57,6 +57,20 @@ export default function Users({ schedule }) {
     if (pw) patch(u, { password: pw });
   }
 
+  async function resetCode(u) {
+    setErr("");
+    try {
+      const r = await api.resetCode(u.username);
+      // Hand this to the member; they redeem it on the login screen.
+      window.alert(
+        `One-time reset code for ${u.username}:\n\n${r.code}\n\n` +
+        `Give it to them privately. It expires in ${r.expires_hours}h and ` +
+        `works once on the “Have a reset code?” link at sign-in.`,
+      );
+      refresh();
+    } catch (e2) { setErr(e2.message); }
+  }
+
   async function remove(u) {
     if (!confirm(`Delete account ${u.username}?`)) return;
     setErr("");
@@ -146,6 +160,11 @@ export default function Users({ schedule }) {
               </td>
               <td className="user-actions">
                 <button className="ghost small" onClick={() => resetPw(u)}>password</button>
+                <button className="ghost small" onClick={() => resetCode(u)}
+                  title="Issue a one-time code the member redeems themselves">
+                  reset code{u.reset_pending ? " •" : ""}
+                </button>
+                {u.totp_enabled && <span className="role-tag" title="2FA enabled">2FA</span>}
                 {!u.protected &&
                   <button className="ghost small danger" onClick={() => remove(u)}>delete</button>}
               </td>

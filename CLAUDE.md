@@ -54,6 +54,8 @@ schedule_extractor/        Python parser
 server/                    FastAPI app (serves API + built React app)
   app.py                   routes: auth, /api/*, self-service, /calendar/<token>.ics, SPA
   accounts.py              AccountStore: users.json, PBKDF2 hashing, roles + capabilities
+                             + TOTP 2FA + one-time reset codes (F2/F3)
+  security.py              login throttle (F1) + TOTP helpers (F2), stdlib-only
   apitokens.py             ApiTokenStore: hashed bearer tokens for agent access
   automation.py            inbox watch + idempotent "ingest latest" (added/updated/unchanged)
   mcp.py                   minimal MCP JSON-RPC server (tools) for the agent endpoint
@@ -78,7 +80,7 @@ web/                       React + Vite frontend (built to web/dist)
                              +generator), Roster, Users, Insights (equity), Activity
   src/api.js, utils.js     fetch wrapper, date/colour helpers
 
-tests/                     pytest (52 tests) — run with `python -m pytest`
+tests/                     pytest (63 tests) — run with `python -m pytest`
 tools/make_sample.py       generate a synthetic workbook for the generic layout
 docs/                      detailed documentation (see table above)
 

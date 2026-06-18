@@ -19,9 +19,16 @@ async function req(path, options = {}) {
 
 export const api = {
   me: () => req("/api/me"),
-  login: (username, password) =>
-    req("/api/login", { method: "POST", body: JSON.stringify({ username, password }) }),
+  login: (username, password, otp) =>
+    req("/api/login", { method: "POST", body: JSON.stringify({ username, password, otp }) }),
   logout: () => req("/api/logout", { method: "POST" }),
+  // password reset (F3) — redeem an admin-issued one-time code
+  resetPassword: (username, code, new_password) =>
+    req("/api/reset-password", { method: "POST", body: JSON.stringify({ username, code, new_password }) }),
+  // two-factor auth (F2)
+  begin2fa: () => req("/api/me/2fa/begin", { method: "POST", body: "{}" }),
+  enable2fa: (otp) => req("/api/me/2fa/enable", { method: "POST", body: JSON.stringify({ otp }) }),
+  disable2fa: (password) => req("/api/me/2fa/disable", { method: "POST", body: JSON.stringify({ password }) }),
   schedule: () => req("/api/schedule"),
   people: () => req("/api/people"),
   reparse: (sheet) =>
@@ -33,6 +40,8 @@ export const api = {
     req(`/api/users/${encodeURIComponent(username)}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteUser: (username) =>
     req(`/api/users/${encodeURIComponent(username)}`, { method: "DELETE" }),
+  resetCode: (username) =>
+    req(`/api/users/${encodeURIComponent(username)}/reset-code`, { method: "POST", body: "{}" }),
 
   // self-service (member)
   availability: () => req("/api/availability"),

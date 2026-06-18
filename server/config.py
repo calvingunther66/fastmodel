@@ -10,6 +10,8 @@ variables or a .env file:
     TIMEZONE       Olson tz for calendar events    (default: America/Los_Angeles)
     PUBLIC_BASE_URL  external URL for .ics links    (default: derived from request)
     SESSION_HTTPS_ONLY  mark the cookie Secure       (default: false)
+    LOGIN_MAX_ATTEMPTS  failed logins before lockout (default: 5)
+    LOGIN_LOCKOUT_SECONDS  lockout duration          (default: 900)
 
 The bootstrap admin (APP_USERNAME/APP_PASSWORD) is always re-synced on startup so
 you can never be locked out. All other accounts and data live in DATA_DIR, which
@@ -35,6 +37,11 @@ INBOX_DIR.mkdir(parents=True, exist_ok=True)
 
 # Optional built-in scheduler: "off" (default), "daily", "weekly", or seconds.
 AUTO_INGEST = os.environ.get("AUTO_INGEST", "off").strip().lower()
+
+# Login lockout (F1): after this many failed logins, lock the account for the
+# cooldown window. In-memory per process; resets on restart.
+LOGIN_MAX_ATTEMPTS = int(os.environ.get("LOGIN_MAX_ATTEMPTS", "5"))
+LOGIN_LOCKOUT_SECONDS = int(os.environ.get("LOGIN_LOCKOUT_SECONDS", "900"))
 
 # Mark the session cookie Secure (HTTPS-only). Turn on when served over HTTPS,
 # e.g. behind a Cloudflare tunnel: SESSION_HTTPS_ONLY=true

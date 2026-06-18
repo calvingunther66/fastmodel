@@ -12,6 +12,7 @@ import Insights from "./components/Insights.jsx";
 import Activity from "./components/Activity.jsx";
 import OpenShifts from "./components/OpenShifts.jsx";
 import Roster from "./components/Roster.jsx";
+import Security from "./components/Security.jsx";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -52,6 +53,7 @@ export default function App() {
     { id: "users", label: "Users", show: can("manage_users") },
     { id: "insights", label: "Insights", show: can("view_leaderboard") || can("tune_scoring") },
     { id: "activity", label: "Activity", show: can("manage_users") || can("manage_coverage") },
+    { id: "security", label: "Security", show: true },
   ].filter((t) => t.show);
 
   const activeTab = tabs.some((t) => t.id === tab) ? tab : "schedule";
@@ -105,6 +107,7 @@ export default function App() {
         {activeTab === "users" && <Users schedule={schedule} />}
         {activeTab === "insights" && <Insights can={can} />}
         {activeTab === "activity" && <Activity />}
+        {activeTab === "security" && <Security user={user} onChange={loadMe} />}
       </main>
     </div>
   );

@@ -150,7 +150,13 @@ roster is still placeholder):
 - **Equity dashboard (D1)** — leaderboard gains nights/weekends/holidays/hours.
   **CSV exports (D2, `server/exports.py`)**. **ICS niceties (D3)** — VALARM reminders,
   LOCATION, categories.
-- **Ops** — `/healthz` (E3). Login lockout / 2FA (F) noted but not in this batch.
+- **Ops** — `/healthz` (E3).
+- **Security trio (F1/F2/F3, `server/security.py`)** — **login lockout** (in-memory
+  failed-attempt throttle, `LOGIN_MAX_ATTEMPTS`/`LOGIN_LOCKOUT_SECONDS`, returns 429
+  with `Retry-After`); **TOTP 2FA** (RFC 6238, stdlib, optional per-account, self-enrol
+  in the Security tab, required at login when enabled); **admin-issued one-time
+  password-reset codes** (no email — admin hands the code over, member redeems it from
+  the sign-in screen). All stdlib, no new deps.
 
 ## Open items / future work
 
@@ -180,9 +186,9 @@ roster is still placeholder):
   (3+ step) chains, honouring the `R`/note availability hints, and an "undo".
 - **Now built** (see "Big adaptive feature batch" above): CSV export, an open-shift
   "who can cover" view (member claims + approve), shift swaps, the schedule generator,
-  the validator, and member preferences. **Still not built:** push events directly
-  into Google Calendar; notifications (email/push) — deliberately sidelined; the
-  security items (login lockout, admin 2FA, member password-reset flow).
+  the validator, member preferences, and the **security trio** (login lockout, TOTP
+  2FA, admin-issued password-reset codes). **Still not built:** push events directly
+  into Google Calendar; notifications (email/push) — deliberately sidelined.
 - **HTTPS is required** for Apple/Google calendar subscriptions — see `SERVER.md`
   (Caddy snippet). Remember to set `PUBLIC_BASE_URL` to the https domain so the
   generated `.ics` links are correct.

@@ -29,6 +29,7 @@ from .coverage import propose as propose_coverage
 from .generator import generate as generate_schedule_draft
 from .ical import build_ics
 from .roster import StaffRoster
+from .security import LoginThrottle
 from .store import ScheduleStore
 from .validate import summarize, validate_schedule
 
@@ -46,6 +47,10 @@ audit = AuditLog()
 roster = StaffRoster()
 api_tokens = ApiTokenStore()
 automation = Automation(store)
+login_throttle = LoginThrottle(
+    max_attempts=config.LOGIN_MAX_ATTEMPTS,
+    lockout_seconds=config.LOGIN_LOCKOUT_SECONDS,
+)
 DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 
 
@@ -63,6 +68,7 @@ def require_oversight(request: Request) -> dict:
 class Credentials(BaseModel):
     username: str
     password: str
+    otp: str | None = None
 
 
 def current_user(request: Request) -> dict | None:
@@ -102,12 +108,54 @@ def _own_person(user: dict) -> str:
 
 @app.post("/api/login")
 def login(creds: Credentials, request: Request):
+    key = (creds.username or "").strip().lower()
+
+    # F1: refuse while the account is locked out from repeated failures.
+    retry = login_throttle.retry_after(key)
+    if retry:
+        audit.log(creds.username, "login_locked", {"retry_after": retry})
+        raise HTTPException(
+            status_code=429,
+            detail=f"too many attempts — try again in {retry // 60 + 1} min",
+            headers={"Retry-After": str(retry)},
+        )
+
     user = accounts.authenticate(creds.username, creds.password)
     if not user:
+        locked = login_throttle.record_failure(key)
+        audit.log(creds.username, "login_failed", {"locked": bool(locked)})
         raise HTTPException(status_code=401, detail="invalid credentials")
+
+    # F2: if the account has TOTP enabled, require a valid one-time code.
+    if user.get("totp_enabled"):
+        if not creds.otp:
+            # Prompt for the code without counting it as a failed attempt.
+            raise HTTPException(status_code=401, detail="otp_required")
+        if not accounts.verify_totp_code(user, creds.otp):
+            login_throttle.record_failure(key)
+            audit.log(user["username"], "login_failed", {"reason": "bad_otp"})
+            raise HTTPException(status_code=401, detail="invalid authentication code")
+
+    login_throttle.reset(key)
     request.session["user"] = user["username"]
     audit.log(user["username"], "login")
     return {"authenticated": True, "user": public_view(user)}
+
+
+@app.post("/api/reset-password")
+def reset_password(payload: dict):
+    """Redeem an admin-issued one-time reset code (F3). No auth — the code is
+    the secret. Always returns the same error for bad username/code/expiry."""
+    username = (payload.get("username") or "").strip()
+    code = payload.get("code") or ""
+    new_password = payload.get("new_password") or ""
+    try:
+        accounts.redeem_reset(username, code, new_password)
+    except (KeyError, ValueError):
+        raise HTTPException(status_code=400, detail="invalid or expired reset code")
+    login_throttle.reset(username.lower())
+    audit.log(username, "password_reset_redeemed")
+    return {"ok": True}
 
 
 @app.post("/api/logout")
@@ -122,6 +170,36 @@ def me(request: Request):
     if not user:
         return {"authenticated": False}
     return {"authenticated": True, "user": public_view(user)}
+
+
+# ---- two-factor auth, self-service (F2) ----------------------------------
+@app.post("/api/me/2fa/begin")
+def begin_2fa(request: Request, user: dict = Depends(require_auth)):
+    """Start TOTP enrollment: returns a secret + otpauth URI to add to an app.
+    Not active until confirmed via /enable with a valid code."""
+    info = accounts.begin_totp(user["username"])
+    audit.log(user["username"], "2fa_enroll_begin")
+    return info
+
+
+@app.post("/api/me/2fa/enable")
+def enable_2fa(payload: dict, request: Request, user: dict = Depends(require_auth)):
+    try:
+        accounts.enable_totp(user["username"], payload.get("otp", ""))
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    audit.log(user["username"], "2fa_enabled")
+    return {"ok": True, "totp_enabled": True}
+
+
+@app.post("/api/me/2fa/disable")
+def disable_2fa(payload: dict, request: Request, user: dict = Depends(require_auth)):
+    """Turn off 2FA. Requires the current password (defence in depth)."""
+    if not accounts.authenticate(user["username"], payload.get("password", "")):
+        raise HTTPException(status_code=403, detail="current password required")
+    accounts.disable_totp(user["username"])
+    audit.log(user["username"], "2fa_disabled")
+    return {"ok": True, "totp_enabled": False}
 
 
 # --------------------------------------------------------------------------
@@ -647,6 +725,17 @@ def update_user(username: str, payload: dict, user: dict = Depends(require_cap("
               {"username": username, "fields": [k for k in payload if k != "password"],
                "password_reset": bool(payload.get("password"))})
     return public_view(updated)
+
+
+@app.post("/api/users/{username}/reset-code")
+def issue_reset_code(username: str, user: dict = Depends(require_cap("manage_users"))):
+    """Mint a one-time reset code to hand to a member (F3). Shown once."""
+    try:
+        code = accounts.issue_reset_code(username)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="no such user")
+    audit.log(user["username"], "issue_reset_code", {"username": username})
+    return {"username": username, "code": code, "expires_hours": 24}
 
 
 @app.delete("/api/users/{username}")
