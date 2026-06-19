@@ -299,6 +299,27 @@ def list_capabilities(user: dict = Depends(require_auth)):
     return {"capabilities": CAPABILITIES, "presets": CAPABILITY_PRESETS}
 
 
+@app.get("/api/vacations")
+def list_vacations(user: dict = Depends(require_auth)):
+    """Vacation (V) entries in the active schedule with effective approval (H1)."""
+    return store.list_vacations()
+
+
+@app.post("/api/vacations/decide")
+def decide_vacation(payload: dict, user: dict = Depends(require_cap("manage_coverage"))):
+    person, date = payload.get("person"), payload.get("date")
+    status = payload.get("status")
+    if not (person and date):
+        raise HTTPException(status_code=400, detail="person and date are required")
+    try:
+        result = store.set_vacation(person, date, status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    audit.log(user["username"], "decide_vacation",
+              {"person": person, "date": date, "status": status})
+    return result
+
+
 @app.get("/api/schedule/issues")
 def schedule_issues(user: dict = Depends(require_auth)):
     """Validator/linter results for the active schedule (A2/A3)."""
@@ -320,7 +341,8 @@ def schedule_generate(payload: dict, user: dict = Depends(require_cap("generate_
     if not quals:
         raise HTTPException(status_code=400, detail="no staff roster to generate from")
     draft = generate_schedule_draft(start, end, quals, prefs=store.list_prefs(),
-                                    stats=store.aggregated_stats())
+                                    stats=store.aggregated_stats(),
+                                    unavailable=store.approved_vacations())
     audit.log(user["username"], "generate_draft",
               {"start": start, "end": end, "people": draft["report"]["people"]})
     return draft

@@ -13,6 +13,7 @@ import Activity from "./components/Activity.jsx";
 import OpenShifts from "./components/OpenShifts.jsx";
 import Roster from "./components/Roster.jsx";
 import Security from "./components/Security.jsx";
+import Vacations from "./components/Vacations.jsx";
 
 // Theme: "light" | "dark" | null (follow OS). Persisted in localStorage and
 // reflected on <html data-theme> so the CSS variables switch.
@@ -122,8 +123,10 @@ export default function App() {
           <MyAvailability schedule={schedule} user={user} onChange={loadSchedule} />}
         {activeTab === "openshifts" &&
           <OpenShifts user={user} can={can} onChange={loadSchedule} />}
-        {activeTab === "coverage" && !empty &&
-          <Coverage schedule={schedule} onChange={loadSchedule} />}
+        {activeTab === "coverage" && !empty && <>
+          <Coverage schedule={schedule} onChange={loadSchedule} />
+          <Vacations onChange={loadSchedule} />
+        </>}
         {activeTab === "admin" && <Admin schedule={schedule} onChange={loadSchedule} />}
         {activeTab === "create" && <Create onChange={loadSchedule} can={can} />}
         {activeTab === "roster" && <Roster />}

@@ -428,3 +428,11 @@ button.print-btn { background: none; border: none; color: var(--accent); cursor:
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
 }
+
+/* vacation approvals (H1) */
+.vacations .callout-list li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.vac-pill { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 7px; border-radius: 10px; font-weight: 700; }
+.vac-approved { background: var(--greenbg); color: var(--green); }
+.vac-denied { background: #fee2e2; color: #991b1b; }
+.vac-pending { background: #fef3c7; color: #92400e; }
+.ghost.small.on { background: var(--accent); color: #fff; border-color: var(--accent); }

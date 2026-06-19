@@ -51,6 +51,7 @@ class ScheduleStore:
         self.prefs_path = data_dir / "prefs.json"
         self.swaps_path = data_dir / "swaps.json"
         self.templates_path = data_dir / "templates.json"
+        self.vacations_path = data_dir / "vacations.json"
         self._lock = threading.Lock()
 
     # ---- low-level json helpers ------------------------------------------
@@ -165,6 +166,7 @@ class ScheduleStore:
             return None
         sched = apply_overrides(base, self._callouts())  # deep-copies even if empty
         apply_swaps(sched, self._swaps())                 # approved swaps move shifts
+        self._apply_vacation_decisions(sched)             # admin approve/deny over green-fill
         contacts = self._contacts()
         if contacts:
             for p in sched.get("people", []):
@@ -290,6 +292,82 @@ class ScheduleStore:
                     break
             self._write_json(self.swaps_path, {"swaps": swaps})
             return found
+
+    # ---- vacation approvals (H1) -----------------------------------------
+    # The workbook marks approved vacation by a green fill (shift["approved"]).
+    # Admins can override per (person, date) here; decisions win over the fill.
+    @staticmethod
+    def _vac_key(person: str, date: str) -> str:
+        return f"{person}|{date}"
+
+    def _vacations(self) -> dict:
+        return self._read_json(self.vacations_path, {})
+
+    @staticmethod
+    def _is_vacation(shift: dict) -> bool:
+        return (shift.get("code") or "").upper() == "V"
+
+    def _vacation_status(self, shift: dict, decision: str | None) -> str:
+        """Effective status: admin decision wins, else the workbook's green fill."""
+        if decision in ("approved", "denied"):
+            return decision
+        return "approved" if shift.get("approved") else "pending"
+
+    def _apply_vacation_decisions(self, sched: dict) -> None:
+        """Stamp each V shift with its effective approval (decisions override fill)."""
+        decisions = self._vacations()
+        for p in sched.get("people", []):
+            name = p.get("name")
+            for s in p.get("shifts", []):
+                if not self._is_vacation(s):
+                    continue
+                status = self._vacation_status(s, decisions.get(self._vac_key(name, s["date"])))
+                s["vacation_status"] = status
+                s["approved"] = status == "approved"
+
+    def list_vacations(self) -> list[dict]:
+        """All vacation (V) entries in the active schedule with effective status."""
+        sched = self.get_raw_schedule() or {}
+        decisions = self._vacations()
+        out = []
+        for p in sched.get("people", []):
+            name = p.get("name")
+            if not name:
+                continue
+            for s in p.get("shifts", []):
+                if not self._is_vacation(s):
+                    continue
+                decision = decisions.get(self._vac_key(name, s["date"]))
+                out.append({
+                    "person": name, "date": s["date"],
+                    "from_workbook": bool(s.get("approved")),
+                    "decision": decision,
+                    "status": self._vacation_status(s, decision),
+                })
+        out.sort(key=lambda v: (v["date"], v["person"]))
+        return out
+
+    def set_vacation(self, person: str, date: str, status: str) -> dict:
+        """Record an approve/deny decision, or clear it (status 'pending')."""
+        with self._lock:
+            data = self._vacations()
+            key = self._vac_key(person, date)
+            if status == "pending":
+                data.pop(key, None)
+            elif status in ("approved", "denied"):
+                data[key] = status
+            else:
+                raise ValueError("status must be approved|denied|pending")
+            self._write_json(self.vacations_path, data)
+        return {"person": person, "date": date, "status": status}
+
+    def approved_vacations(self) -> dict:
+        """{NAME_UPPER: {dates}} a person is on *approved* vacation (engine block)."""
+        out: dict[str, set] = {}
+        for v in self.list_vacations():
+            if v["status"] == "approved":
+                out.setdefault(v["person"].upper(), set()).add(v["date"])
+        return out
 
     # ---- builder templates (C3) ------------------------------------------
     def list_templates(self) -> dict:

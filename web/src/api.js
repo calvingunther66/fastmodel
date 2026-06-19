@@ -99,6 +99,11 @@ export const api = {
   createSchedule: (body) =>
     req("/api/schedule/create", { method: "POST", body: JSON.stringify(body) }),
 
+  // vacation approvals (H1)
+  vacations: () => req("/api/vacations"),
+  decideVacation: (person, date, status) =>
+    req("/api/vacations/decide", { method: "POST", body: JSON.stringify({ person, date, status }) }),
+
   // validator (A2/A3) + generator (C1) + templates (C3)
   issues: () => req("/api/schedule/issues"),
   generate: (start, end) =>
