@@ -375,7 +375,8 @@ def schedule_generate(payload: dict, user: dict = Depends(require_cap("generate_
         raise HTTPException(status_code=400, detail="no staff roster to generate from")
     draft = generate_schedule_draft(start, end, quals, prefs=store.list_prefs(),
                                     stats=store.aggregated_stats(),
-                                    unavailable=store.approved_vacations())
+                                    unavailable=store.approved_vacations(),
+                                    debt=store.fairness_debt())
     audit.log(user["username"], "generate_draft",
               {"start": start, "end": end, "people": draft["report"]["people"]})
     return draft

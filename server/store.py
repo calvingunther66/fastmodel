@@ -531,6 +531,24 @@ class ScheduleStore:
                          "hours": round(hours, 1)}
         return out
 
+    def fairness_debt(self) -> dict:
+        """{NAME_UPPER: debt} — how much 'heavy slot' load each person carries.
+
+        Accumulated nights across all periods (kept in history) plus this period's
+        weekends and holidays worked. The generator adds this to a person's seed
+        load so chronic night/weekend carriers are eased off next period (K3)."""
+        agg = self.aggregated_stats()
+        equity = self._equity()
+        names = set(agg["work"]) | set(equity)
+        out = {}
+        for n in names:
+            nights = agg["work"].get(n, {}).get("by_type", {}).get("night", 0)
+            eq = equity.get(n, {})
+            debt = nights + eq.get("weekends", 0) + eq.get("holidays_worked", 0)
+            if debt:
+                out[n.upper()] = debt
+        return out
+
     def period_trend(self) -> list[dict]:
         """Total worked shifts per period, oldest first (period keys are
         'start..end' so lexical order is chronological). Powers the trend chart (K1)."""
@@ -549,6 +567,7 @@ class ScheduleStore:
         agg = self.aggregated_stats()
         covers, work = agg["covers"], agg["work"]
         equity = self._equity()
+        debt = self.fairness_debt()
         names = set(covers) | set(work)
         # Include everyone currently on the schedule, even with zero history.
         sched = self.get_raw_schedule() or {}
@@ -570,6 +589,7 @@ class ScheduleStore:
                 "holidays": eq.get("holidays", 0),
                 "holidays_worked": eq.get("holidays_worked", 0),
                 "hours": eq.get("hours", 0.0),
+                "debt": debt.get(n.upper(), 0),
             })
         rows.sort(key=lambda r: (-r["covers"], -r["worked_total"], r["name"]))
         return {"periods": agg["periods"], "people": rows, "trend": self.period_trend()}

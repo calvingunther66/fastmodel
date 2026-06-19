@@ -464,3 +464,6 @@ tr.urg-urgent td, tr.urg-past td { box-shadow: inset 3px 0 0 var(--red); }
 .legend-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
 .chart-label { font-size: 10px; fill: var(--ink); }
 .chart-num { font-size: 9px; fill: var(--muted); }
+
+/* fairness debt (K3) */
+.debt-cell { font-weight: 700; color: var(--mid); }
