@@ -320,6 +320,14 @@ def decide_vacation(payload: dict, user: dict = Depends(require_cap("manage_cove
     return result
 
 
+@app.get("/api/coverage/forecast")
+def coverage_forecast(user: dict = Depends(require_cap("manage_coverage"))):
+    """Upcoming coverage gaps / single-points-of-failure (K2)."""
+    from .forecast import forecast as run_forecast
+    schedule = store.get_schedule() or {"people": []}
+    return run_forecast(schedule, roster=roster.engine_quals())
+
+
 @app.get("/api/holidays")
 def list_holidays(user: dict = Depends(require_auth)):
     return store.list_holidays()

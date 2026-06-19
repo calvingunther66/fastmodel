@@ -109,6 +109,9 @@ export const api = {
   createSchedule: (body) =>
     req("/api/schedule/create", { method: "POST", body: JSON.stringify(body) }),
 
+  // coverage gap forecaster (K2)
+  forecast: () => req("/api/coverage/forecast"),
+
   // holiday registry (H3)
   holidays: () => req("/api/holidays"),
   addHoliday: (date, label) =>
