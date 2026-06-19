@@ -44,3 +44,24 @@ class AuditLog:
             except ValueError:
                 continue
         return out[::-1]
+
+    # Detail keys whose values name a schedule person (for the personal feed, J1).
+    _PERSON_KEYS = ("name", "person", "covered_by", "mover", "backfill",
+                    "claimer", "a_person", "b_person", "with")
+
+    def for_person(self, person: str, scan: int = 1000) -> list[dict]:
+        """Most-recent-first entries that affect `person` (J1).
+
+        Matches the person against the people-naming fields of each entry's
+        details, so it surfaces things done *to* them (covered, moved, vacation
+        decided, swap accepted) regardless of who performed the action."""
+        if not person:
+            return []
+        target = person.strip().lower()
+        out = []
+        for entry in self.tail(scan):
+            details = entry.get("details") or {}
+            values = {str(details.get(k, "")).strip().lower() for k in self._PERSON_KEYS}
+            if target in values:
+                out.append(entry)
+        return out

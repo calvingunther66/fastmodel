@@ -18,6 +18,7 @@ import Holidays from "./components/Holidays.jsx";
 import Forecast from "./components/Forecast.jsx";
 import Backup from "./components/Backup.jsx";
 import Ops from "./components/Ops.jsx";
+import MyChanges from "./components/MyChanges.jsx";
 
 // Theme: "light" | "dark" | null (follow OS). Persisted in localStorage and
 // reflected on <html data-theme> so the CSS variables switch.
@@ -123,8 +124,10 @@ export default function App() {
         )}
         {activeTab === "schedule" && !empty && <ScheduleGrid schedule={schedule} user={user} />}
         {activeTab === "calendar" && !empty && <MyCalendar schedule={schedule} user={user} />}
-        {activeTab === "availability" && !empty &&
-          <MyAvailability schedule={schedule} user={user} onChange={loadSchedule} />}
+        {activeTab === "availability" && !empty && <>
+          <MyChanges person={user?.person} />
+          <MyAvailability schedule={schedule} user={user} onChange={loadSchedule} />
+        </>}
         {activeTab === "openshifts" &&
           <OpenShifts user={user} can={can} onChange={loadSchedule} />}
         {activeTab === "coverage" && !empty && <>

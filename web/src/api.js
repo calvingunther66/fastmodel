@@ -137,6 +137,9 @@ export const api = {
   deleteTemplate: (name) =>
     req(`/api/templates/${encodeURIComponent(name)}`, { method: "DELETE" }),
 
+  // personal change feed (J1)
+  myChanges: () => req("/api/me/changes"),
+
   // member preferences (B4)
   myPrefs: () => req("/api/me/prefs"),
   setMyPrefs: (prefs) =>

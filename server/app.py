@@ -543,6 +543,52 @@ def my_callout_clear(payload: dict, user: dict = Depends(require_auth)):
     return {"ok": True}
 
 
+def _describe_change(person: str, entry: dict) -> str:
+    """A first-person sentence for a personal-feed entry (J1)."""
+    d = entry.get("details") or {}
+    a, action = entry.get("actor"), entry.get("action")
+    date, shift = d.get("date"), d.get("shift")
+    when = f" on {date}" if date else ""
+    sh = f" {shift}" if shift else ""
+    me = person.lower()
+
+    def is_me(key):
+        return str(d.get(key, "")).strip().lower() == me
+
+    if action == "assign_cover":
+        if is_me("name"):
+            return f"Your{sh} shift{when} is now covered by {d.get('covered_by')}."
+        if is_me("covered_by"):
+            return f"You were assigned to cover {d.get('name')}'s{sh} shift{when}."
+    if action == "unassign_cover" and is_me("name"):
+        return f"Cover for your{sh} shift{when} was undone — it's open again."
+    if action in ("mark_sick", "self_callout") and (is_me("name") or is_me("person")):
+        return f"You were marked out{sh}{when}."
+    if action == "clear_callout" and is_me("name"):
+        return f"Your call-out{sh}{when} was cleared."
+    if action == "decide_vacation" and is_me("person"):
+        return f"Your vacation{when} was {d.get('status', 'updated')}."
+    if action == "approve_claim" and is_me("claimer"):
+        return f"Your offer to cover {d.get('name')}'s{sh} shift{when} was approved."
+    if action == "decide_swap" and (is_me("a_person") or is_me("b_person")):
+        return f"A swap involving you was {d.get('decision', 'updated')}."
+    if action == "propose_swap" and is_me("with"):
+        return f"{a} proposed a shift swap with you."
+    if action in ("apply_chain", "assign_cascade") and (is_me("mover") or is_me("backfill")):
+        return f"You were moved to help cover a shift{when}."
+    # generic fallback
+    return f"{action.replace('_', ' ')}{when}."
+
+
+@app.get("/api/me/changes")
+def my_changes(user: dict = Depends(require_auth)):
+    """A personal 'what changed for me' feed (J1), newest first."""
+    person = _own_person(user)
+    entries = audit.for_person(person)
+    return [{"ts": e["ts"], "action": e["action"],
+             "summary": _describe_change(person, e)} for e in entries]
+
+
 @app.get("/api/availability")
 def availability(user: dict = Depends(require_auth)):
     return store.list_offers()
