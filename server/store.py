@@ -653,6 +653,27 @@ class ScheduleStore:
                     return True
         return False
 
+    def apply_chain(self, name: str, date: str, shift_type: str,
+                    steps: list[dict], backfill: str) -> None:
+        """Apply an N-step cascade (I2). steps[i] moves a person onto the slot the
+        previous step vacated; the final vacated slot is filled by `backfill`.
+
+        step = {mover, from: {code, shift_type}, onto_code, onto_type}. step[0]
+        moves `mover` onto the open (name/date/shift_type) shift."""
+        if not steps:
+            return
+        # 1) first mover covers the open shift
+        self.assign_cover(name, date, shift_type, steps[0]["mover"],
+                          code=steps[0].get("onto_code"))
+        # 2) each mover vacates their slot; the next mover (or backfill) fills it
+        for i, st in enumerate(steps):
+            frm = st["from"]
+            filler = steps[i + 1]["mover"] if i + 1 < len(steps) else backfill
+            self.mark_sick(st["mover"], date, frm["shift_type"], code=frm.get("code"),
+                           reason=f"moved to cover {st.get('onto_code') or 'shift'}")
+            self.assign_cover(st["mover"], date, frm["shift_type"], filler,
+                              code=frm.get("code"))
+
     def clear_callout(self, name: str, date: str, shift_type: str) -> None:
         with self._lock:
             removed = [c for c in self._callouts() if self._same(c, name, date, shift_type)]

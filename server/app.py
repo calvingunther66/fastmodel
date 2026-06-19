@@ -477,6 +477,20 @@ def coverage_assign_cascade(payload: dict, user: dict = Depends(require_cap("man
     return {"ok": True, "mover": mover, "backfill": backfill}
 
 
+@app.post("/api/coverage/apply-chain")
+def coverage_apply_chain(payload: dict, user: dict = Depends(require_cap("manage_coverage"))):
+    """Apply a multi-step (3+) cascade chain (I2)."""
+    name, date, shift_type = _coverage_target(payload)
+    steps, backfill = payload.get("steps"), payload.get("backfill")
+    if not steps or not backfill:
+        raise HTTPException(status_code=400, detail="steps and backfill are required")
+    store.apply_chain(name, date, shift_type, steps, backfill)
+    audit.log(user["username"], "apply_chain",
+              {"name": name, "date": date, "shift": shift_type,
+               "depth": len(steps), "backfill": backfill})
+    return {"ok": True}
+
+
 @app.post("/api/coverage/clear")
 def coverage_clear(payload: dict, user: dict = Depends(require_cap("manage_coverage"))):
     name, date, shift_type = _coverage_target(payload)

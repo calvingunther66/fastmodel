@@ -83,6 +83,18 @@ export default function Coverage({ schedule, onChange }) {
     }
   }
 
+  async function applyChain(chain) {
+    setBusy(true);
+    try {
+      await api.applyChain(proposal.open_shift, chain);
+      setProposal(null);
+      refreshCallouts();
+      onChange();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function unassign(co) {
     setBusy(true);
     try {
@@ -166,6 +178,23 @@ export default function Coverage({ schedule, onChange }) {
               </li>
             ))}
           </ul>
+
+          {proposal.deep_cascades?.length > 0 && (
+            <>
+              <h4>Multi-step cascade</h4>
+              <ul className="cand-list">
+                {proposal.deep_cascades.map((c, i) => (
+                  <li key={i}>
+                    <div className="cand-main">
+                      <span className="cand-reasons">{c.summary}</span>
+                      <span className="cand-contact">{c.steps.length} moves + backfill</span>
+                    </div>
+                    <button disabled={busy} onClick={() => applyChain(c)}>Apply</button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
           {proposal.unavailable_qualified?.length > 0 && (
             <>

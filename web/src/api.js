@@ -82,6 +82,14 @@ export const api = {
     req("/api/coverage/clear", { method: "POST", body: JSON.stringify({ name, date, shift_type }) }),
   unassignCover: (name, date, shift_type) =>
     req("/api/coverage/unassign", { method: "POST", body: JSON.stringify({ name, date, shift_type }) }),
+  applyChain: (open, chain) =>
+    req("/api/coverage/apply-chain", {
+      method: "POST",
+      body: JSON.stringify({
+        name: open.name, date: open.date, shift_type: open.shift_type,
+        steps: chain.steps, backfill: chain.backfill,
+      }),
+    }),
   // API tokens (manage_users)
   tokens: () => req("/api/tokens"),
   createToken: (name, capabilities) =>
