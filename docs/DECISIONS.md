@@ -158,6 +158,37 @@ roster is still placeholder):
   password-reset codes** (no email — admin hands the code over, member redeems it from
   the sign-in screen). All stdlib, no new deps.
 
+## Round-two batch (G–M, built)
+
+All standard-library / no new runtime deps; each item shipped as its own commit.
+
+- **Phone-first UX & a11y (G)** — dark mode (theme toggle + `prefers-color-scheme`,
+  tokenised CSS vars); responsive layout with a phone-friendly **agenda ("By day")**
+  view; schedule **search/filter** (name, shift-type, "just me", jump-to-today);
+  **print/PDF** view (`@media print` + Print button); accessibility pass (skip link,
+  landmarks, `aria-current`, focus-visible, reduced-motion, alert/status roles).
+- **Exploit parsed data (H)** — **vacation-approval workflow** (H1, decisions override
+  the green-fill, block the generator); **qualified-but-off** people surfaced in cover
+  proposals with a reason (H2); **holiday registry** (H3) highlighting dates + a
+  "worked a holiday" equity metric. (H4 clinic-split still gated on a real sample.)
+- **Coverage depth (I)** — **undo** a cover assignment, reversing the learned step-up
+  (I1); **multi-step (3+) cascades** via a recursive beam search + `apply_chain` (I2);
+  **open-shift aging/urgency** banding + count badge (I3).
+- **Intelligence (K)** — inline-SVG **equity charts + period trend** (K1); a
+  **coverage gap forecaster** (`server/forecast.py`) flagging under-staffed/thin days
+  (K2); a **fairness-debt ledger** feeding the generator so heavy-slot carriers ease
+  off (K3).
+- **Pi resilience (L)** — **backup/restore** the whole data dir (`server/backup.py`,
+  zip, path-traversal-guarded) (L1); an **admin ops dashboard** (`/api/ops`, config +
+  data size + accounts/2FA + automation) (L2).
+- **Pull-only comms (J)** — a personal **"what changed for me"** feed
+  (`audit.for_person` + `_describe_change`) (J1); a no-login **kiosk wall display**
+  at `/kiosk/<token>` (J2); a per-person **Atom feed** at `/feed/<token>.atom` (J3).
+  (Email/SMS push remains deliberately sidelined.)
+- **History (M)** — every saved period is **archived** (`DATA_DIR/archive/`) so
+  re-uploads don't lose months; browse + re-activate past periods (M1); **re-upload
+  diff** (`server/diff.py`) showing added/removed/re-coded shifts (M2).
+
 ## Open items / future work
 
 - **Clinic split (morning/afternoon)** detection via a coloured center bar is

@@ -62,14 +62,20 @@ server/                    FastAPI app (serves API + built React app)
   roster.py                StaffRoster: roster.json + quals()/engine_quals() (A1)
   store.py                 ScheduleStore: upload/parse/persist + tokens + call-outs +
                              offers + contacts + stats + prefs + claims + swaps + templates
-  coverage.py              cover-suggestion engine (free/move/cascade), roster-aware +
-                             adaptive scoring; apply_overrides / apply_swaps
+                             + vacations (H1) + holidays (H3) + period archive (M1) +
+                             re-upload diff capture (M2) + kiosk token (J2)
+  coverage.py              cover-suggestion engine (free/move/cascade + deep chains I2),
+                             roster-aware + adaptive; qualified-but-off (H2); apply_swaps
   validate.py              ★ schedule validator + fatigue checks (A2/A3)
-  generator.py             ★ assisted fairness-aware schedule generator (C1)
+  generator.py             ★ assisted fairness-aware generator (C1) + vacation block +
+                             fairness-debt seeding (K3)
+  forecast.py              coverage gap/thin-day forecaster (K2)
   exports.py               CSV exports (D2)
-  audit.py                 AuditLog: append-only activity log (audit.jsonl)
+  diff.py                  schedule diffing for re-upload/period compare (M2)
+  backup.py                zip/unzip the data dir for backup & restore (L1)
+  audit.py                 AuditLog: append-only log + for_person personal feed (J1)
   ical.py                  build_ics(): shifts -> VCALENDAR (+ reminders/location, D3)
-  config.py                env-var config + persistent SECRET_KEY
+  config.py                env-var config + persistent SECRET_KEY + login lockout knobs
   __main__.py              `python -m server` (uvicorn)
   requirements.txt         server-only deps
 
@@ -80,7 +86,7 @@ web/                       React + Vite frontend (built to web/dist)
                              +generator), Roster, Users, Insights (equity), Activity
   src/api.js, utils.js     fetch wrapper, date/colour helpers
 
-tests/                     pytest (63 tests) — run with `python -m pytest`
+tests/                     pytest (90 tests) — run with `python -m pytest`
 tools/make_sample.py       generate a synthetic workbook for the generic layout
 docs/                      detailed documentation (see table above)
 
