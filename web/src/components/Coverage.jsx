@@ -83,6 +83,17 @@ export default function Coverage({ schedule, onChange }) {
     }
   }
 
+  async function unassign(co) {
+    setBusy(true);
+    try {
+      await api.unassignCover(co.name, co.date, co.shift_type);
+      refreshCallouts();
+      onChange();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="card">
       <h2>Call-outs & coverage <span className="trial">trial</span></h2>
@@ -185,6 +196,12 @@ export default function Coverage({ schedule, onChange }) {
             <span className={co.covered_by ? "covered" : "open"}>
               {co.covered_by ? `covered by ${co.covered_by}` : "OPEN — needs coverage"}
             </span>
+            {co.covered_by && (
+              <button className="ghost small" disabled={busy} onClick={() => unassign(co)}
+                title="Undo the assignment — reopens the shift">
+                undo assign
+              </button>
+            )}
             <button className="ghost small" disabled={busy} onClick={() => clear(co)}>
               clear
             </button>

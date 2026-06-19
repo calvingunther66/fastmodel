@@ -485,6 +485,16 @@ def coverage_clear(payload: dict, user: dict = Depends(require_cap("manage_cover
     return {"ok": True}
 
 
+@app.post("/api/coverage/unassign")
+def coverage_unassign(payload: dict, user: dict = Depends(require_cap("manage_coverage"))):
+    """Undo a cover assignment: the shift reopens, the call-out stays (I1)."""
+    name, date, shift_type = _coverage_target(payload)
+    undone = store.unassign_cover(name, date, shift_type)
+    audit.log(user["username"], "unassign_cover",
+              {"name": name, "date": date, "shift": shift_type, "undone": undone})
+    return {"ok": True, "reopened": undone}
+
+
 # --------------------------------------------------------------------------
 # self-service (members, scoped to their own linked person)
 # --------------------------------------------------------------------------

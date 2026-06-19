@@ -80,6 +80,8 @@ export const api = {
     }),
   clearCallout: (name, date, shift_type) =>
     req("/api/coverage/clear", { method: "POST", body: JSON.stringify({ name, date, shift_type }) }),
+  unassignCover: (name, date, shift_type) =>
+    req("/api/coverage/unassign", { method: "POST", body: JSON.stringify({ name, date, shift_type }) }),
   // API tokens (manage_users)
   tokens: () => req("/api/tokens"),
   createToken: (name, capabilities) =>

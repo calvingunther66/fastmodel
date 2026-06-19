@@ -465,6 +465,19 @@ class ScheduleStore:
             c["by_type"][shift_type] = c["by_type"].get(shift_type, 0) + 1
         self._write_json(self.stats_path, stats)
 
+    def _unbump_cover(self, person: str, code: str | None, shift_type: str) -> None:
+        """Reverse a cover step-up (for undo), never dropping below zero."""
+        stats = self._stats()
+        c = stats.get("covers", {}).get(person)
+        if not c:
+            return
+        c["count"] = max(0, c.get("count", 0) - 1)
+        if code and code.upper() in c.get("by_code", {}):
+            c["by_code"][code.upper()] = max(0, c["by_code"][code.upper()] - 1)
+        if shift_type and shift_type in c.get("by_type", {}):
+            c["by_type"][shift_type] = max(0, c["by_type"][shift_type] - 1)
+        self._write_json(self.stats_path, stats)
+
     def aggregated_stats(self) -> dict:
         """Per-person totals across all periods, plus cover step-up counts."""
         stats = self._stats()
@@ -624,11 +637,32 @@ class ScheduleStore:
                        reason=f"moved to cover {name}")
         self.assign_cover(mover, date, from_type, backfill, code=from_code)
 
+    def unassign_cover(self, name: str, date: str, shift_type: str) -> bool:
+        """Undo a cover assignment: the shift goes back to open (call-out kept).
+
+        Also reverses the learned step-up so the fairness picture isn't skewed by a
+        mistaken assignment. Returns True if a cover was actually removed."""
+        with self._lock:
+            callouts = self._callouts()
+            for c in callouts:
+                if self._same(c, name, date, shift_type) and c.get("covered_by"):
+                    prev = c["covered_by"]
+                    c["covered_by"] = None
+                    self._save_callouts(callouts)
+                    self._unbump_cover(prev, c.get("code"), shift_type)
+                    return True
+        return False
+
     def clear_callout(self, name: str, date: str, shift_type: str) -> None:
         with self._lock:
+            removed = [c for c in self._callouts() if self._same(c, name, date, shift_type)]
             callouts = [c for c in self._callouts()
                         if not self._same(c, name, date, shift_type)]
             self._save_callouts(callouts)
+        # If the cleared call-out had a cover, reverse its learned step-up too.
+        for c in removed:
+            if c.get("covered_by"):
+                self._unbump_cover(c["covered_by"], c.get("code"), shift_type)
 
     def _tokens(self) -> dict:
         return self._read_json(self.tokens_path, {})
