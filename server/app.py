@@ -320,6 +320,31 @@ def decide_vacation(payload: dict, user: dict = Depends(require_cap("manage_cove
     return result
 
 
+@app.get("/api/holidays")
+def list_holidays(user: dict = Depends(require_auth)):
+    return store.list_holidays()
+
+
+@app.post("/api/holidays")
+def add_holiday(payload: dict, user: dict = Depends(require_cap("manage_coverage"))):
+    date = payload.get("date")
+    if not date:
+        raise HTTPException(status_code=400, detail="date is required")
+    try:
+        result = store.add_holiday(date, payload.get("label", ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    audit.log(user["username"], "add_holiday", result)
+    return result
+
+
+@app.delete("/api/holidays/{date}")
+def remove_holiday(date: str, user: dict = Depends(require_cap("manage_coverage"))):
+    store.remove_holiday(date)
+    audit.log(user["username"], "remove_holiday", {"date": date})
+    return {"ok": True}
+
+
 @app.get("/api/schedule/issues")
 def schedule_issues(user: dict = Depends(require_auth)):
     """Validator/linter results for the active schedule (A2/A3)."""

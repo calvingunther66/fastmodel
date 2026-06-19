@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { api } from "../api.js";
 import { dateRange, dayLabel, shiftClass, timeLabel } from "../utils.js";
 
 const LEVELS = [
@@ -20,6 +21,12 @@ export default function ScheduleGrid({ schedule, user }) {
   const [q, setQ] = useState("");
   const [level, setLevel] = useState("all");
   const [mine, setMine] = useState(false);
+  const [holidays, setHolidays] = useState({});
+  useEffect(() => {
+    api.holidays()
+      .then((hs) => setHolidays(Object.fromEntries(hs.map((h) => [h.date, h.label || "holiday"]))))
+      .catch(() => setHolidays({}));
+  }, []);
 
   if (!dates.length) return <p className="muted">No schedule loaded yet.</p>;
 
@@ -78,13 +85,13 @@ export default function ScheduleGrid({ schedule, user }) {
       {people.length === 0
         ? <p className="muted">No people match your filters.</p>
         : view === "grid"
-          ? <GridView dates={dates} people={people} byPerson={byPerson} today={today} />
-          : <AgendaView dates={dates} people={people} byPerson={byPerson} today={today} />}
+          ? <GridView dates={dates} people={people} byPerson={byPerson} today={today} holidays={holidays} />
+          : <AgendaView dates={dates} people={people} byPerson={byPerson} today={today} holidays={holidays} />}
     </div>
   );
 }
 
-function GridView({ dates, people, byPerson, today }) {
+function GridView({ dates, people, byPerson, today, holidays }) {
   return (
     <div className="grid-wrap">
       <table className="grid">
@@ -93,10 +100,12 @@ function GridView({ dates, people, byPerson, today }) {
             <th className="sticky name-col">Name</th>
             {dates.map((d) => {
               const { dom, dow, weekend } = dayLabel(d);
+              const hol = holidays[d];
               return (
-                <th key={d} className={`${weekend ? "weekend" : ""}${d === today ? " today-col" : ""}`}>
+                <th key={d} title={hol || undefined}
+                  className={`${weekend ? "weekend" : ""}${d === today ? " today-col" : ""}${hol ? " holiday-col" : ""}`}>
                   <div className="dom">{dom}</div>
-                  <div className="dow">{dow}</div>
+                  <div className="dow">{hol ? "★" : dow}</div>
                 </th>
               );
             })}
@@ -124,11 +133,12 @@ function GridView({ dates, people, byPerson, today }) {
   );
 }
 
-function AgendaView({ dates, people, byPerson, today }) {
+function AgendaView({ dates, people, byPerson, today, holidays }) {
   return (
     <div className="agenda">
       {dates.map((d) => {
         const { dom, dow, weekend } = dayLabel(d);
+        const hol = holidays[d];
         const groups = { day: [], midshift: [], night: [], other: [] };
         for (const p of people) {
           for (const s of (byPerson.get(p.name).get(d) || [])) {
@@ -139,10 +149,11 @@ function AgendaView({ dates, people, byPerson, today }) {
         const total = Object.values(groups).reduce((n, a) => n + a.length, 0);
         return (
           <section key={d} id={d === today ? "agenda-today" : undefined}
-            className={`agenda-day${weekend ? " weekend" : ""}${d === today ? " today" : ""}`}>
+            className={`agenda-day${weekend ? " weekend" : ""}${d === today ? " today" : ""}${hol ? " holiday" : ""}`}>
             <h3>
               {dow} {dom}
               {d === today && <span className="today-tag">today</span>}
+              {hol && <span className="holiday-tag">★ {hol}</span>}
             </h3>
             {total === 0 && <p className="muted small">Nobody scheduled.</p>}
             {[...LEVELS, ["other", "Other"]].map(([key, label]) => (

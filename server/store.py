@@ -52,6 +52,7 @@ class ScheduleStore:
         self.swaps_path = data_dir / "swaps.json"
         self.templates_path = data_dir / "templates.json"
         self.vacations_path = data_dir / "vacations.json"
+        self.holidays_path = data_dir / "holidays.json"
         self._lock = threading.Lock()
 
     # ---- low-level json helpers ------------------------------------------
@@ -301,7 +302,8 @@ class ScheduleStore:
         return f"{person}|{date}"
 
     def _vacations(self) -> dict:
-        return self._read_json(self.vacations_path, {})
+        path = getattr(self, "vacations_path", None)
+        return self._read_json(path, {}) if path else {}
 
     @staticmethod
     def _is_vacation(shift: dict) -> bool:
@@ -368,6 +370,38 @@ class ScheduleStore:
             if v["status"] == "approved":
                 out.setdefault(v["person"].upper(), set()).add(v["date"])
         return out
+
+    # ---- holiday registry (H3) -------------------------------------------
+    # Unit holidays (dates), admin-managed. Drives grid highlighting and the
+    # "worked a holiday" equity metric. Distinct from a person's H status code
+    # (which means *they* have that holiday off).
+    def _holidays(self) -> dict:
+        path = getattr(self, "holidays_path", None)
+        return self._read_json(path, {}) if path else {}
+
+    def list_holidays(self) -> list[dict]:
+        return [{"date": d, "label": lbl}
+                for d, lbl in sorted(self._holidays().items())]
+
+    def holiday_dates(self) -> set:
+        return set(self._holidays().keys())
+
+    def add_holiday(self, date: str, label: str = "") -> dict:
+        try:
+            dt.date.fromisoformat(date)
+        except (ValueError, TypeError):
+            raise ValueError("date must be YYYY-MM-DD")
+        with self._lock:
+            data = self._holidays()
+            data[date] = str(label or "").strip()
+            self._write_json(self.holidays_path, data)
+        return {"date": date, "label": data[date]}
+
+    def remove_holiday(self, date: str) -> None:
+        with self._lock:
+            data = self._holidays()
+            data.pop(date, None)
+            self._write_json(self.holidays_path, data)
 
     # ---- builder templates (C3) ------------------------------------------
     def list_templates(self) -> dict:
@@ -456,12 +490,13 @@ class ScheduleStore:
         computed from the current period's schedule, which retains dates + times."""
         from .validate import shift_hours  # local import avoids a cycle
         sched = self.get_raw_schedule() or {}
+        holiday_dates = self.holiday_dates()
         out: dict[str, dict] = {}
         for p in sched.get("people", []):
             name = p.get("name")
             if not name:
                 continue
-            nights = weekends = holidays = 0
+            nights = weekends = holidays = holidays_worked = 0
             hours = 0.0
             for s in p.get("shifts", []):
                 if (s.get("code") or "").upper() == "H":
@@ -471,13 +506,16 @@ class ScheduleStore:
                 hours += shift_hours(s)
                 if s.get("shift_type") == "night":
                     nights += 1
+                if s.get("date") in holiday_dates:
+                    holidays_worked += 1  # worked a registered unit holiday
                 try:
                     if dt.date.fromisoformat(s["date"]).weekday() >= 5:
                         weekends += 1
                 except (ValueError, KeyError, TypeError):
                     pass
             out[name] = {"nights": nights, "weekends": weekends,
-                         "holidays": holidays, "hours": round(hours, 1)}
+                         "holidays": holidays, "holidays_worked": holidays_worked,
+                         "hours": round(hours, 1)}
         return out
 
     def leaderboard(self) -> dict:
@@ -504,6 +542,7 @@ class ScheduleStore:
                 "nights": eq.get("nights", 0),
                 "weekends": eq.get("weekends", 0),
                 "holidays": eq.get("holidays", 0),
+                "holidays_worked": eq.get("holidays_worked", 0),
                 "hours": eq.get("hours", 0.0),
             })
         rows.sort(key=lambda r: (-r["covers"], -r["worked_total"], r["name"]))

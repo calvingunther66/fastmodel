@@ -69,7 +69,8 @@ export default function Insights({ can }) {
             <thead>
               <tr>
                 <th>#</th><th>Person</th><th>Covers</th><th>Cover types</th>
-                <th>Shifts worked</th><th>Nights</th><th>Weekends</th><th>Hours</th>
+                <th>Shifts worked</th><th>Nights</th><th>Weekends</th>
+                <th title="Worked on a registered unit holiday">Holidays</th><th>Hours</th>
                 <th>Work mix</th>
               </tr>
             </thead>
@@ -88,12 +89,13 @@ export default function Insights({ can }) {
                   <td>{p.worked_total}</td>
                   <td>{p.nights ?? 0}</td>
                   <td>{p.weekends ?? 0}</td>
+                  <td>{p.holidays_worked ?? 0}</td>
                   <td>{p.hours ?? 0}</td>
                   <td className="mix">{breakdown(p.worked_by_code)}</td>
                 </tr>
               ))}
               {people.length === 0 && !err && (
-                <tr><td colSpan={9} className="muted">No history yet.</td></tr>
+                <tr><td colSpan={10} className="muted">No history yet.</td></tr>
               )}
             </tbody>
           </table>

@@ -99,6 +99,13 @@ export const api = {
   createSchedule: (body) =>
     req("/api/schedule/create", { method: "POST", body: JSON.stringify(body) }),
 
+  // holiday registry (H3)
+  holidays: () => req("/api/holidays"),
+  addHoliday: (date, label) =>
+    req("/api/holidays", { method: "POST", body: JSON.stringify({ date, label }) }),
+  removeHoliday: (date) =>
+    req(`/api/holidays/${encodeURIComponent(date)}`, { method: "DELETE" }),
+
   // vacation approvals (H1)
   vacations: () => req("/api/vacations"),
   decideVacation: (person, date, status) =>
