@@ -17,6 +17,7 @@ import Vacations from "./components/Vacations.jsx";
 import Holidays from "./components/Holidays.jsx";
 import Forecast from "./components/Forecast.jsx";
 import Backup from "./components/Backup.jsx";
+import Ops from "./components/Ops.jsx";
 
 // Theme: "light" | "dark" | null (follow OS). Persisted in localStorage and
 // reflected on <html data-theme> so the CSS variables switch.
@@ -135,7 +136,7 @@ export default function App() {
         {activeTab === "admin" && <Admin schedule={schedule} onChange={loadSchedule} />}
         {activeTab === "create" && <Create onChange={loadSchedule} can={can} />}
         {activeTab === "roster" && <Roster />}
-        {activeTab === "users" && <><Users schedule={schedule} /><Backup /></>}
+        {activeTab === "users" && <><Users schedule={schedule} /><Ops /><Backup /></>}
         {activeTab === "insights" && <Insights can={can} />}
         {activeTab === "activity" && <Activity />}
         {activeTab === "security" && <Security user={user} onChange={loadMe} />}

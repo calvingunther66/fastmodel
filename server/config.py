@@ -70,3 +70,6 @@ def _resolve_secret_key() -> str:
 
 SECRET_KEY = _resolve_secret_key()
 USING_DEFAULT_PASSWORD = APP_PASSWORD == "changeme"
+
+# Bumped manually; surfaced in the ops dashboard (L2) and /healthz.
+APP_VERSION = "1.1"

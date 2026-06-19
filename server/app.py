@@ -972,10 +972,62 @@ def healthz():
     schedule = store.get_raw_schedule()
     return {
         "ok": True,
+        "version": config.APP_VERSION,
         "has_schedule": schedule is not None,
         "active_sheet": (schedule or {}).get("parsed_sheet"),
         "uploaded_at": (schedule or {}).get("uploaded_at"),
         "people": len([p for p in (schedule or {}).get("people", []) if p.get("name")]),
+    }
+
+
+# --------------------------------------------------------------------------
+# ops dashboard (admins) — config + data + health at a glance (L2)
+# --------------------------------------------------------------------------
+@app.get("/api/ops")
+def ops(user: dict = Depends(require_cap("manage_users"))):
+    import os
+    schedule = store.get_raw_schedule() or {}
+    accts = accounts.list()
+    # data-dir size + file inventory
+    total = 0
+    files = []
+    for root, _dirs, names in os.walk(config.DATA_DIR):
+        for n in names:
+            fp = Path(root) / n
+            try:
+                size = fp.stat().st_size
+            except OSError:
+                continue
+            total += size
+            rel = str(fp.relative_to(config.DATA_DIR))
+            if not rel.startswith("inbox/"):
+                files.append({"name": rel, "bytes": size})
+    files.sort(key=lambda f: -f["bytes"])
+    return {
+        "version": config.APP_VERSION,
+        "config": {
+            "timezone": config.TIMEZONE,
+            "public_base_url": config.PUBLIC_BASE_URL or None,
+            "session_https_only": config.SESSION_HTTPS_ONLY,
+            "auto_ingest": config.AUTO_INGEST,
+            "login_max_attempts": config.LOGIN_MAX_ATTEMPTS,
+            "login_lockout_seconds": config.LOGIN_LOCKOUT_SECONDS,
+            "using_default_password": config.USING_DEFAULT_PASSWORD,
+            "data_dir": str(config.DATA_DIR),
+        },
+        "data": {"total_bytes": total, "files": files[:25]},
+        "schedule": {
+            "active_sheet": schedule.get("parsed_sheet"),
+            "uploaded_at": schedule.get("uploaded_at"),
+            "people": len([p for p in schedule.get("people", []) if p.get("name")]),
+        },
+        "accounts": {
+            "total": len(accts),
+            "admins": len([u for u in accts if u.get("role") == "admin"]),
+            "with_2fa": len([u for u in accts if u.get("totp_enabled")]),
+        },
+        "tokens": len(api_tokens.list()),
+        "automation": automation.status(),
     }
 
 
