@@ -371,3 +371,29 @@ code.break { word-break: break-all; font-size: 0.72rem; display: block; margin-t
 
 /* theme toggle (G2) */
 button.theme-toggle { background: var(--field); color: var(--ink); border: 1px solid var(--line); padding: 6px 10px; line-height: 1; }
+
+/* schedule view toggle + agenda (G1) */
+.view-toggle { display: inline-flex; gap: 0; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.view-toggle button { background: var(--field); color: var(--ink); border: none; border-radius: 0; padding: 6px 14px; }
+.view-toggle button.on { background: var(--accent); color: #fff; }
+.agenda { display: grid; gap: 10px; }
+.agenda-day { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.agenda-day.weekend { background: var(--panel); }
+.agenda-day.today { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.agenda-day h3 { margin: 0 0 6px; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; }
+.today-tag { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; background: var(--accent); color: #fff; padding: 1px 6px; border-radius: 4px; }
+.agenda-level { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; border-top: 1px dashed var(--line); }
+.agenda-level:first-of-type { border-top: none; }
+.agenda-level-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); min-width: 44px; flex-shrink: 0; }
+.agenda-people { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+
+/* responsive shell (G1) */
+@media (max-width: 720px) {
+  .app { padding: 10px; }
+  header { gap: 8px; }
+  header h1 { font-size: 1.1rem; }
+  nav { gap: 4px; width: 100%; }
+  nav button { padding: 6px 10px; font-size: 0.82rem; }
+  .card { padding: 14px; }
+  .who-am-i { font-size: 0.8rem; }
+}
