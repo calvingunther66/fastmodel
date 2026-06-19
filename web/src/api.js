@@ -109,6 +109,12 @@ export const api = {
   createSchedule: (body) =>
     req("/api/schedule/create", { method: "POST", body: JSON.stringify(body) }),
 
+  // schedule history / archive (M1)
+  archive: () => req("/api/archive"),
+  archiveView: (period) => req(`/api/archive/view?period=${encodeURIComponent(period)}`),
+  archiveActivate: (period) =>
+    req("/api/archive/activate", { method: "POST", body: JSON.stringify({ period }) }),
+
   // ops dashboard (L2)
   ops: () => req("/api/ops"),
 

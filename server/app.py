@@ -294,6 +294,30 @@ def create_schedule(payload: dict, user: dict = Depends(require_cap("upload"))):
             "people": len([p for p in result["people"] if p["shifts"]])}
 
 
+@app.get("/api/archive")
+def archive_list(user: dict = Depends(require_auth)):
+    """Summaries of all archived schedule periods (M1)."""
+    return store.list_archive()
+
+
+@app.get("/api/archive/view")
+def archive_view(period: str, user: dict = Depends(require_auth)):
+    data = store.get_archived(period)
+    if data is None:
+        raise HTTPException(status_code=404, detail="no such archived period")
+    return data
+
+
+@app.post("/api/archive/activate")
+def archive_activate(payload: dict, user: dict = Depends(require_cap("upload"))):
+    period = payload.get("period")
+    data = store.activate_archived(period or "")
+    if data is None:
+        raise HTTPException(status_code=404, detail="no such archived period")
+    audit.log(user["username"], "activate_archived", {"period": period})
+    return {"ok": True, "parsed_sheet": data.get("parsed_sheet")}
+
+
 @app.get("/api/capabilities")
 def list_capabilities(user: dict = Depends(require_auth)):
     """The delegatable capabilities and the one-click presets, for the Users UI."""

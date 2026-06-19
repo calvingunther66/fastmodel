@@ -19,6 +19,7 @@ import Forecast from "./components/Forecast.jsx";
 import Backup from "./components/Backup.jsx";
 import Ops from "./components/Ops.jsx";
 import MyChanges from "./components/MyChanges.jsx";
+import History from "./components/History.jsx";
 
 // Theme: "light" | "dark" | null (follow OS). Persisted in localStorage and
 // reflected on <html data-theme> so the CSS variables switch.
@@ -76,6 +77,7 @@ export default function App() {
     { id: "users", label: "Users", show: can("manage_users") },
     { id: "insights", label: "Insights", show: can("view_leaderboard") || can("tune_scoring") },
     { id: "activity", label: "Activity", show: can("manage_users") || can("manage_coverage") },
+    { id: "history", label: "History", show: true },
     { id: "security", label: "Security", show: true },
   ].filter((t) => t.show);
 
@@ -142,6 +144,7 @@ export default function App() {
         {activeTab === "users" && <><Users schedule={schedule} /><Ops /><Backup /></>}
         {activeTab === "insights" && <Insights can={can} />}
         {activeTab === "activity" && <Activity />}
+        {activeTab === "history" && <History can={can} onChange={loadSchedule} />}
         {activeTab === "security" && <Security user={user} onChange={loadMe} />}
       </main>
     </div>

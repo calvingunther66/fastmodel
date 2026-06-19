@@ -53,6 +53,7 @@ class ScheduleStore:
         self.templates_path = data_dir / "templates.json"
         self.vacations_path = data_dir / "vacations.json"
         self.holidays_path = data_dir / "holidays.json"
+        self.archive_dir = data_dir / "archive"
         self._lock = threading.Lock()
 
     # ---- low-level json helpers ------------------------------------------
@@ -63,6 +64,66 @@ class ScheduleStore:
 
     def _write_json(self, path: Path, data) -> None:
         path.write_text(json.dumps(data, indent=2, default=str))
+
+    # ---- period archive (M1) ---------------------------------------------
+    # A period key is "<start>..<end>"; only ISO-date..ISO-date is accepted as a
+    # filename so an archived period can never escape the archive directory.
+    _PERIOD_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2}$")
+
+    @staticmethod
+    def _period_key(result: dict) -> str | None:
+        dr = result.get("date_range") or {}
+        start, end = dr.get("start"), dr.get("end")
+        return f"{start}..{end}" if start and end else None
+
+    def _archive(self, result: dict) -> None:
+        """Keep every saved period so re-uploads don't destroy history (M1)."""
+        period = self._period_key(result)
+        if not period or not self._PERIOD_RE.match(period):
+            return
+        self.archive_dir.mkdir(parents=True, exist_ok=True)
+        self._write_json(self.archive_dir / f"{period}.json", result)
+
+    def list_archive(self) -> list[dict]:
+        """Summaries of all archived periods, newest first; flags the active one."""
+        if not self.archive_dir.exists():
+            return []
+        active = self._period_key(self.get_raw_schedule() or {})
+        out = []
+        for f in self.archive_dir.glob("*.json"):
+            try:
+                data = json.loads(f.read_text())
+            except ValueError:
+                continue
+            period = self._period_key(data) or f.stem
+            out.append({
+                "period": period,
+                "parsed_sheet": data.get("parsed_sheet"),
+                "uploaded_at": data.get("uploaded_at"),
+                "people": len([p for p in data.get("people", []) if p.get("name")]),
+                "active": period == active,
+            })
+        out.sort(key=lambda r: r["period"], reverse=True)
+        return out
+
+    def get_archived(self, period: str) -> dict | None:
+        if not self._PERIOD_RE.match(period or ""):
+            return None
+        path = self.archive_dir / f"{period}.json"
+        if not path.exists():
+            return None
+        return json.loads(path.read_text())
+
+    def activate_archived(self, period: str) -> dict | None:
+        """Make an archived period the active schedule again."""
+        data = self.get_archived(period)
+        if data is None:
+            return None
+        with self._lock:
+            self._write_json(self.schedule_path, data)
+            self._ensure_tokens(data)
+            self._record_work(data)
+        return data
 
     # ---- parsing ----------------------------------------------------------
     def _parse(self, sheet_name: str | None):
@@ -100,6 +161,7 @@ class ScheduleStore:
             self._write_json(self.schedule_path, result)
             self._ensure_tokens(result)
             self._record_work(result)
+            self._archive(result)
             return result
 
     def reparse(self, sheet_name: str) -> dict:
@@ -111,6 +173,7 @@ class ScheduleStore:
             self._write_json(self.schedule_path, result)
             self._ensure_tokens(result)
             self._record_work(result)
+            self._archive(result)
             return result
 
     def create_schedule(self, title: str, start: str, end: str,
@@ -153,6 +216,7 @@ class ScheduleStore:
             self._write_json(self.schedule_path, result)
             self._ensure_tokens(result)
             self._record_work(result)
+            self._archive(result)
             return result
 
     def get_raw_schedule(self) -> dict | None:

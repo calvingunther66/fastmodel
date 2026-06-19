@@ -491,3 +491,7 @@ a.button-link:hover { filter: brightness(1.05); }
 
 /* atom feed link (J3) */
 .feed-link { font-size: 0.78rem; margin-left: 10px; font-weight: 400; }
+
+/* schedule history (M1) */
+.history .callout-list li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.archive-view { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
