@@ -404,3 +404,19 @@ button.theme-toggle { background: var(--field); color: var(--ink); border: 1px s
 .filter-bar .chk { display: flex; flex-direction: row; align-items: center; gap: 4px; font-size: 0.85rem; color: var(--ink); }
 .grid .today-col { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .grid thead th.today-col { background: color-mix(in srgb, var(--accent) 20%, var(--panel)); }
+
+/* print / PDF view (G3) */
+button.print-btn { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 0.95rem; padding: 0 0 0 12px; }
+@media print {
+  :root { --bg: #fff; --card: #fff; --panel: #fff; --field: #fff; --ink: #000; --line: #999; }
+  header, .filter-bar, .view-toggle, .export-link, .print-btn, nav, .trial { display: none !important; }
+  .app { max-width: none; padding: 0; }
+  .subbar { margin: 0 0 8px; }
+  .grid-wrap { overflow: visible; border: none; }
+  table.grid { font-size: 0.62rem; width: 100%; }
+  .grid th, .grid td { border: 1px solid #999; }
+  .sticky.name-col, .grid thead th { position: static; }
+  .agenda-day { break-inside: avoid; box-shadow: none; }
+  .shift.unavailable { color: #000; background: none; text-decoration: underline; }
+  a[href]::after { content: ""; }
+}

@@ -104,6 +104,7 @@ export default function App() {
           {can("export") && (
             <a className="export-link" href="/api/export/schedule.csv">⤓ CSV</a>
           )}
+          <button className="export-link print-btn" onClick={() => window.print()}>⎙ Print</button>
         </div>
       )}
 
