@@ -454,3 +454,13 @@ button.print-btn { background: none; border: none; color: var(--accent); cursor:
 .urg-pill.urg-soon { background: #fef3c7; color: #92400e; }
 .urg-pill.urg-later { background: var(--panel); color: var(--muted); }
 tr.urg-urgent td, tr.urg-past td { box-shadow: inset 3px 0 0 var(--red); }
+
+/* equity charts (K1) */
+.charts-row { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 20px; }
+.charts-row h3 { margin: 0 0 8px; font-size: 0.95rem; }
+.chart { min-width: 280px; }
+.chart-legend { display: flex; gap: 14px; font-size: 0.76rem; color: var(--muted); margin-bottom: 6px; }
+.legend-item { display: inline-flex; align-items: center; gap: 4px; }
+.legend-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.chart-label { font-size: 10px; fill: var(--ink); }
+.chart-num { font-size: 9px; fill: var(--muted); }

@@ -1,5 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api.js";
+import { EquityBars, Sparkline } from "./Charts.jsx";
+
+const EQUITY_METRICS = [
+  { key: "nights", label: "Nights", color: "var(--night)" },
+  { key: "weekends", label: "Weekends", color: "var(--mid)" },
+  { key: "holidays_worked", label: "Holidays", color: "#f59e0b" },
+];
 
 // Dashboard for admins / coordinators. The leaderboard (who steps up most) and
 // the scoring slider are gated by separate capabilities, so each can be delegated
@@ -103,6 +110,21 @@ export default function Insights({ can }) {
             Nights / weekends / hours are for the active period (the equity view) —
             use them to spot who’s carrying the heavy slots.
           </p>
+
+          {people.length > 0 && (
+            <div className="charts-row">
+              <div>
+                <h3>Heavy-slot balance</h3>
+                <EquityBars rows={people} metrics={EQUITY_METRICS} />
+              </div>
+              {data?.trend?.length > 1 && (
+                <div>
+                  <h3>Shifts per period</h3>
+                  <Sparkline points={data.trend} label={`${data.trend.length} periods on record`} />
+                </div>
+              )}
+            </div>
+          )}
         </>
       ) : (
         <p className="muted">You can tune the scoring dial but not view the leaderboard.</p>

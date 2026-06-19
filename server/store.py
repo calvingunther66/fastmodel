@@ -531,6 +531,19 @@ class ScheduleStore:
                          "hours": round(hours, 1)}
         return out
 
+    def period_trend(self) -> list[dict]:
+        """Total worked shifts per period, oldest first (period keys are
+        'start..end' so lexical order is chronological). Powers the trend chart (K1)."""
+        out = []
+        for period, counts in self._stats().get("work_by_period", {}).items():
+            out.append({
+                "period": period,
+                "shifts": sum(c.get("total", 0) for c in counts.values()),
+                "people": len(counts),
+            })
+        out.sort(key=lambda r: r["period"])
+        return out
+
     def leaderboard(self) -> dict:
         """Per-person insights: cover step-ups plus an equity breakdown (D1)."""
         agg = self.aggregated_stats()
@@ -559,7 +572,7 @@ class ScheduleStore:
                 "hours": eq.get("hours", 0.0),
             })
         rows.sort(key=lambda r: (-r["covers"], -r["worked_total"], r["name"]))
-        return {"periods": agg["periods"], "people": rows}
+        return {"periods": agg["periods"], "people": rows, "trend": self.period_trend()}
 
     # ---- tunable settings -------------------------------------------------
     def _settings(self) -> dict:
