@@ -485,3 +485,6 @@ a.button-link:hover { filter: brightness(1.05); }
 .change-list li.fresh { font-weight: 600; }
 .change-list li.fresh .change-text::after { content: " •"; color: var(--accent); }
 .change-when { color: var(--muted); min-width: 52px; font-variant-numeric: tabular-nums; }
+
+/* kiosk admin (J2) */
+.kiosk-info { margin: 16px 0; padding-top: 8px; border-top: 1px solid var(--line); }

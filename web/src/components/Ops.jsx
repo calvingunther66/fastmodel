@@ -12,7 +12,16 @@ function kb(bytes) {
 export default function Ops() {
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
-  useEffect(() => { api.ops().then(setD).catch((e) => setErr(e.message)); }, []);
+  const [kiosk, setKiosk] = useState(null);
+  useEffect(() => {
+    api.ops().then(setD).catch((e) => setErr(e.message));
+    api.kioskToken().then(setKiosk).catch(() => {});
+  }, []);
+
+  function rotateKiosk() {
+    if (!confirm("Rotate the kiosk link? The old URL stops working.")) return;
+    api.rotateKiosk().then(setKiosk).catch((e) => setErr(e.message));
+  }
 
   if (err) return <div className="card"><div className="error" role="alert">{err}</div></div>;
   if (!d) return null;
@@ -52,6 +61,21 @@ export default function Ops() {
           </dl>
         </div>
       </div>
+
+      {kiosk && (
+        <div className="kiosk-info">
+          <h3>Kiosk wall display</h3>
+          <p className="muted">
+            A no-login, auto-refreshing “who’s on today” board for a unit screen.
+            Anyone with the link can view it — rotate it to revoke.
+          </p>
+          <div className="row gap">
+            <a className="button-link" href={kiosk.url} target="_blank" rel="noreferrer">Open display</a>
+            <input readOnly value={kiosk.url} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 220 }} />
+            <button className="ghost" onClick={rotateKiosk}>Rotate link</button>
+          </div>
+        </div>
+      )}
 
       <h3>Largest data files</h3>
       <ul className="callout-list">

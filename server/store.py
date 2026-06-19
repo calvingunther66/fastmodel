@@ -604,6 +604,45 @@ class ScheduleStore:
         except (TypeError, ValueError):
             return 0.5
 
+    # ---- kiosk display token (J2) ----------------------------------------
+    def kiosk_token(self) -> str:
+        """Stable token for the no-login wall display; created on first use."""
+        with self._lock:
+            s = self._settings()
+            tok = s.get("kiosk_token")
+            if not tok:
+                tok = secrets.token_urlsafe(12)
+                s["kiosk_token"] = tok
+                self._write_json(self.settings_path, s)
+            return tok
+
+    def rotate_kiosk_token(self) -> str:
+        with self._lock:
+            s = self._settings()
+            s["kiosk_token"] = secrets.token_urlsafe(12)
+            self._write_json(self.settings_path, s)
+            return s["kiosk_token"]
+
+    def kiosk_board(self, date: str) -> dict:
+        """Who's on (by level) for `date`, plus the uncovered shifts from `date` on."""
+        sched = self.get_schedule() or {"people": []}
+        levels = {"day": [], "midshift": [], "night": []}
+        for p in sched.get("people", []):
+            name = p.get("name")
+            for s in p.get("shifts", []):
+                if (s.get("date") == date and s.get("category") == "location"
+                        and s.get("available", True)):
+                    levels.setdefault(s["shift_type"], []).append({
+                        "name": name, "code": s.get("code"),
+                        "covering_for": s.get("covering_for"),
+                    })
+        for v in levels.values():
+            v.sort(key=lambda r: (r["code"] or "", r["name"] or ""))
+        open_shifts = [c for c in self._callouts()
+                       if not c.get("covered_by") and c.get("date", "") >= date]
+        open_shifts.sort(key=lambda c: (c.get("date", ""), c.get("name", "")))
+        return {"date": date, "levels": levels, "open": open_shifts}
+
     def set_fairness_weight(self, value: float) -> float:
         w = max(0.0, min(1.0, float(value)))
         with self._lock:

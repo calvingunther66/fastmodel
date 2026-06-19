@@ -112,6 +112,10 @@ export const api = {
   // ops dashboard (L2)
   ops: () => req("/api/ops"),
 
+  // kiosk wall display (J2)
+  kioskToken: () => req("/api/kiosk-token"),
+  rotateKiosk: () => req("/api/kiosk-token/rotate", { method: "POST", body: "{}" }),
+
   // coverage gap forecaster (K2)
   forecast: () => req("/api/coverage/forecast"),
 

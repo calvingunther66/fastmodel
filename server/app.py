@@ -1078,6 +1078,80 @@ def ops(user: dict = Depends(require_cap("manage_users"))):
 
 
 # --------------------------------------------------------------------------
+# kiosk wall display (J2): no-login, token-protected, auto-refreshing board
+# --------------------------------------------------------------------------
+@app.get("/api/kiosk-token")
+def kiosk_token_info(request: Request, user: dict = Depends(require_cap("manage_users"))):
+    token = store.kiosk_token()
+    return {"token": token, "url": f"{_ics_base(request)}/kiosk/{token}"}
+
+
+@app.post("/api/kiosk-token/rotate")
+def kiosk_token_rotate(request: Request, user: dict = Depends(require_cap("manage_users"))):
+    token = store.rotate_kiosk_token()
+    audit.log(user["username"], "kiosk_rotate")
+    return {"token": token, "url": f"{_ics_base(request)}/kiosk/{token}"}
+
+
+def _kiosk_html(board: dict) -> str:
+    import datetime as _dt
+    from html import escape
+    pretty = _dt.date.fromisoformat(board["date"]).strftime("%A, %B %-d")
+    labels = [("day", "Day"), ("midshift", "Mid"), ("night", "Night")]
+    cols = []
+    for key, label in labels:
+        rows = board["levels"].get(key, [])
+        items = "".join(
+            f'<li><b>{escape(r["code"] or "")}</b> {escape(r["name"] or "")}'
+            + (f' <span class="cov">↺ {escape(r["covering_for"])}</span>' if r.get("covering_for") else "")
+            + "</li>"
+            for r in rows) or '<li class="none">—</li>'
+        cols.append(f'<section><h2>{label}</h2><ul>{items}</ul></section>')
+    open_n = len(board["open"])
+    open_html = ""
+    if open_n:
+        items = "".join(
+            f'<li>{escape(c.get("date",""))} · {escape((c.get("code") or "?"))}'
+            f' ({escape(c.get("shift_type",""))}) — {escape(c.get("name",""))}</li>'
+            for c in board["open"][:8])
+        open_html = f'<div class="open"><h2>⚠ Needs coverage ({open_n})</h2><ul>{items}</ul></div>'
+    return f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="60">
+<title>On today — {escape(pretty)}</title>
+<style>
+  body {{ margin:0; font-family: system-ui, sans-serif; background:#0f141b; color:#e6eaf0; }}
+  header {{ padding:24px 32px; border-bottom:1px solid #2a3441; }}
+  header h1 {{ margin:0; font-size:2.2rem; }}
+  header .d {{ color:#93a0b2; font-size:1.3rem; }}
+  .board {{ display:flex; gap:24px; padding:24px 32px; flex-wrap:wrap; }}
+  section {{ flex:1; min-width:240px; }}
+  section h2 {{ font-size:1.4rem; color:#7aa2ff; border-bottom:2px solid #2a3441; padding-bottom:6px; }}
+  ul {{ list-style:none; padding:0; margin:0; }}
+  li {{ font-size:1.5rem; padding:8px 0; border-bottom:1px solid #1b232e; }}
+  li b {{ color:#fff; }}
+  .none {{ color:#5b6675; }}
+  .cov {{ color:#34d399; font-size:1rem; }}
+  .open {{ margin:0 32px 32px; padding:16px 24px; background:#3a1d1d; border-radius:12px; }}
+  .open h2 {{ color:#f87171; margin:0 0 8px; }}
+  .open li {{ border-bottom:1px solid #4a2a2a; }}
+</style></head><body>
+<header><h1>On today</h1><div class="d">{escape(pretty)}</div></header>
+<div class="board">{''.join(cols)}</div>
+{open_html}
+</body></html>"""
+
+
+@app.get("/kiosk/{token}")
+def kiosk(token: str):
+    import datetime as _dt
+    if token != store.kiosk_token():
+        raise HTTPException(status_code=404, detail="unknown display")
+    board = store.kiosk_board(_dt.date.today().isoformat())
+    return Response(content=_kiosk_html(board), media_type="text/html; charset=utf-8")
+
+
+# --------------------------------------------------------------------------
 # public calendar feed (no auth — the token IS the secret)
 # --------------------------------------------------------------------------
 @app.get("/calendar/{token}.ics")
