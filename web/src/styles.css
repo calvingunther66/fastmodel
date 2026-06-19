@@ -488,3 +488,6 @@ a.button-link:hover { filter: brightness(1.05); }
 
 /* kiosk admin (J2) */
 .kiosk-info { margin: 16px 0; padding-top: 8px; border-top: 1px solid var(--line); }
+
+/* atom feed link (J3) */
+.feed-link { font-size: 0.78rem; margin-left: 10px; font-weight: 400; }

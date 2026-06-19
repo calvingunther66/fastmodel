@@ -230,6 +230,7 @@ def people(request: Request, user: dict = Depends(require_auth)):
             "shift_count": p["shift_count"],
             "ics_url": url,
             "webcal_url": url.replace("http://", "webcal://").replace("https://", "webcal://"),
+            "feed_url": f"{base}/feed/{p['token']}.atom",
         })
     return out
 
@@ -1149,6 +1150,36 @@ def kiosk(token: str):
         raise HTTPException(status_code=404, detail="unknown display")
     board = store.kiosk_board(_dt.date.today().isoformat())
     return Response(content=_kiosk_html(board), media_type="text/html; charset=utf-8")
+
+
+# --------------------------------------------------------------------------
+# per-person Atom feed of schedule changes (J3) — pull-based, token is the secret
+# --------------------------------------------------------------------------
+@app.get("/feed/{token}.atom")
+def person_feed(token: str):
+    from xml.sax.saxutils import escape
+    person = store.person_by_token(token)
+    if person is None:
+        raise HTTPException(status_code=404, detail="unknown feed")
+    name = person["name"]
+    entries = audit.for_person(name)
+    updated = entries[0]["ts"] if entries else "1970-01-01T00:00:00+00:00"
+    items = []
+    for i, e in enumerate(entries[:50]):
+        summary = escape(_describe_change(name, e))
+        items.append(
+            f"<entry><title>{summary}</title>"
+            f"<id>urn:fastmodel:change:{escape(token)}:{escape(e['ts'])}:{i}</id>"
+            f"<updated>{escape(e['ts'])}</updated>"
+            f"<content type=\"text\">{summary}</content></entry>")
+    feed = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<feed xmlns="http://www.w3.org/2005/Atom">'
+        f"<title>Schedule updates — {escape(name)}</title>"
+        f"<id>urn:fastmodel:feed:{escape(token)}</id>"
+        f"<updated>{escape(updated)}</updated>"
+        + "".join(items) + "</feed>")
+    return Response(content=feed, media_type="application/atom+xml; charset=utf-8")
 
 
 # --------------------------------------------------------------------------
