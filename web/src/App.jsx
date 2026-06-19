@@ -14,11 +14,28 @@ import OpenShifts from "./components/OpenShifts.jsx";
 import Roster from "./components/Roster.jsx";
 import Security from "./components/Security.jsx";
 
+// Theme: "light" | "dark" | null (follow OS). Persisted in localStorage and
+// reflected on <html data-theme> so the CSS variables switch.
+function useTheme() {
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme"));
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme) root.setAttribute("data-theme", theme);
+    else root.removeAttribute("data-theme");
+    if (theme) localStorage.setItem("theme", theme);
+    else localStorage.removeItem("theme");
+  }, [theme]);
+  const isDark = theme === "dark"
+    || (!theme && window.matchMedia?.("(prefers-color-scheme: dark)").matches);
+  return [isDark, () => setTheme(isDark ? "light" : "dark")];
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [authed, setAuthed] = useState(null);
   const [tab, setTab] = useState("schedule");
   const [schedule, setSchedule] = useState(null);
+  const [isDark, toggleTheme] = useTheme();
 
   function loadMe() {
     return api.me()
@@ -71,6 +88,9 @@ export default function App() {
             {user?.username}{user?.person ? ` · ${user.person}` : ""}
             <span className="role-tag">{role}</span>
           </span>
+          <button className="theme-toggle" onClick={toggleTheme}
+            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            title={isDark ? "Light mode" : "Dark mode"}>{isDark ? "☀" : "☾"}</button>
           <button className="logout" onClick={() => api.logout().then(loadMe)}>Sign out</button>
         </nav>
       </header>
