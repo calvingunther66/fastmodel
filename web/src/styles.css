@@ -397,3 +397,10 @@ button.theme-toggle { background: var(--field); color: var(--ink); border: 1px s
   .card { padding: 14px; }
   .who-am-i { font-size: 0.8rem; }
 }
+
+/* schedule filter bar (G5) */
+.filter-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.filter-bar .filter-search { min-width: 160px; }
+.filter-bar .chk { display: flex; flex-direction: row; align-items: center; gap: 4px; font-size: 0.85rem; color: var(--ink); }
+.grid .today-col { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.grid thead th.today-col { background: color-mix(in srgb, var(--accent) 20%, var(--panel)); }

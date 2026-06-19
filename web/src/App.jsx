@@ -113,7 +113,7 @@ export default function App() {
             No schedule loaded yet{can("upload") ? " — go to “Upload” or “Create”." : "."}
           </p>
         )}
-        {activeTab === "schedule" && !empty && <ScheduleGrid schedule={schedule} />}
+        {activeTab === "schedule" && !empty && <ScheduleGrid schedule={schedule} user={user} />}
         {activeTab === "calendar" && !empty && <MyCalendar schedule={schedule} user={user} />}
         {activeTab === "availability" && !empty &&
           <MyAvailability schedule={schedule} user={user} onChange={loadSchedule} />}

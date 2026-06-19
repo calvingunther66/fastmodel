@@ -7,48 +7,84 @@ const LEVELS = [
   ["night", "Night"],
 ];
 
-export default function ScheduleGrid({ schedule }) {
+export default function ScheduleGrid({ schedule, user }) {
   const range = schedule?.date_range || {};
   const dates = dateRange(range.start, range.end);
-  const people = (schedule?.people || []).filter((p) => p.name);
-  // Default to the agenda view on narrow screens (phones), grid on desktop.
+  const allPeople = (schedule?.people || []).filter((p) => p.name);
+  const today = new Date().toISOString().slice(0, 10);
+  const todayInRange = dates.includes(today);
+
   const [view, setView] = useState(
     typeof window !== "undefined" && window.innerWidth < 720 ? "agenda" : "grid",
   );
+  const [q, setQ] = useState("");
+  const [level, setLevel] = useState("all");
+  const [mine, setMine] = useState(false);
 
   if (!dates.length) return <p className="muted">No schedule loaded yet.</p>;
 
-  // Index shifts by person + date for quick lookup.
+  // Apply person-level filters (name search + "just me").
+  const needle = q.trim().toLowerCase();
+  const people = allPeople.filter((p) => {
+    if (mine && user?.person && p.name !== user.person) return false;
+    if (needle && !p.name.toLowerCase().includes(needle)) return false;
+    return true;
+  });
+
+  // Index shifts by person + date, honouring the shift-type filter.
+  const shiftOk = (s) => level === "all" || s.shift_type === level;
   const byPerson = new Map();
   for (const p of people) {
     const m = new Map();
     for (const s of p.shifts) {
+      if (!shiftOk(s)) continue;
       if (!m.has(s.date)) m.set(s.date, []);
       m.get(s.date).push(s);
     }
     byPerson.set(p.name, m);
   }
 
+  function jumpToToday() {
+    if (view !== "agenda") setView("agenda");
+    requestAnimationFrame(() =>
+      document.getElementById("agenda-today")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
   return (
     <div className="schedule-view">
-      <div className="view-toggle" role="tablist" aria-label="Schedule view">
-        <button role="tab" aria-selected={view === "grid"}
-          className={view === "grid" ? "on" : ""} onClick={() => setView("grid")}>
-          Grid
-        </button>
-        <button role="tab" aria-selected={view === "agenda"}
-          className={view === "agenda" ? "on" : ""} onClick={() => setView("agenda")}>
-          By day
-        </button>
+      <div className="filter-bar">
+        <div className="view-toggle" role="tablist" aria-label="Schedule view">
+          <button role="tab" aria-selected={view === "grid"}
+            className={view === "grid" ? "on" : ""} onClick={() => setView("grid")}>Grid</button>
+          <button role="tab" aria-selected={view === "agenda"}
+            className={view === "agenda" ? "on" : ""} onClick={() => setView("agenda")}>By day</button>
+        </div>
+        <input className="filter-search" type="search" placeholder="Search name…"
+          aria-label="Search by name" value={q} onChange={(e) => setQ(e.target.value)} />
+        <select aria-label="Filter by shift" value={level} onChange={(e) => setLevel(e.target.value)}>
+          <option value="all">All shifts</option>
+          {LEVELS.map(([k, l]) => <option key={k} value={k}>{l} only</option>)}
+        </select>
+        {user?.person && (
+          <label className="chk">
+            <input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} />
+            Just me
+          </label>
+        )}
+        {todayInRange && (
+          <button className="ghost small" onClick={jumpToToday}>Jump to today</button>
+        )}
       </div>
-      {view === "grid"
-        ? <GridView dates={dates} people={people} byPerson={byPerson} />
-        : <AgendaView dates={dates} people={people} byPerson={byPerson} />}
+      {people.length === 0
+        ? <p className="muted">No people match your filters.</p>
+        : view === "grid"
+          ? <GridView dates={dates} people={people} byPerson={byPerson} today={today} />
+          : <AgendaView dates={dates} people={people} byPerson={byPerson} today={today} />}
     </div>
   );
 }
 
-function GridView({ dates, people, byPerson }) {
+function GridView({ dates, people, byPerson, today }) {
   return (
     <div className="grid-wrap">
       <table className="grid">
@@ -58,7 +94,7 @@ function GridView({ dates, people, byPerson }) {
             {dates.map((d) => {
               const { dom, dow, weekend } = dayLabel(d);
               return (
-                <th key={d} className={weekend ? "weekend" : ""}>
+                <th key={d} className={`${weekend ? "weekend" : ""}${d === today ? " today-col" : ""}`}>
                   <div className="dom">{dom}</div>
                   <div className="dow">{dow}</div>
                 </th>
@@ -72,18 +108,13 @@ function GridView({ dates, people, byPerson }) {
             return (
               <tr key={p.name}>
                 <td className="sticky name-col">{p.name}</td>
-                {dates.map((d) => {
-                  const shifts = m.get(d) || [];
-                  return (
-                    <td key={d}>
-                      {shifts.map((s, i) => (
-                        <span key={i} className={shiftClass(s)} title={shiftTitle(s)}>
-                          {s.code}
-                        </span>
-                      ))}
-                    </td>
-                  );
-                })}
+                {dates.map((d) => (
+                  <td key={d} className={d === today ? "today-col" : ""}>
+                    {(m.get(d) || []).map((s, i) => (
+                      <span key={i} className={shiftClass(s)} title={shiftTitle(s)}>{s.code}</span>
+                    ))}
+                  </td>
+                ))}
               </tr>
             );
           })}
@@ -93,13 +124,11 @@ function GridView({ dates, people, byPerson }) {
   );
 }
 
-function AgendaView({ dates, people, byPerson }) {
-  const today = new Date().toISOString().slice(0, 10);
+function AgendaView({ dates, people, byPerson, today }) {
   return (
     <div className="agenda">
       {dates.map((d) => {
         const { dom, dow, weekend } = dayLabel(d);
-        // Collect everyone working this date, grouped by shift level.
         const groups = { day: [], midshift: [], night: [], other: [] };
         for (const p of people) {
           for (const s of (byPerson.get(p.name).get(d) || [])) {
@@ -109,13 +138,14 @@ function AgendaView({ dates, people, byPerson }) {
         }
         const total = Object.values(groups).reduce((n, a) => n + a.length, 0);
         return (
-          <section key={d} className={`agenda-day${weekend ? " weekend" : ""}${d === today ? " today" : ""}`}>
+          <section key={d} id={d === today ? "agenda-today" : undefined}
+            className={`agenda-day${weekend ? " weekend" : ""}${d === today ? " today" : ""}`}>
             <h3>
               {dow} {dom}
               {d === today && <span className="today-tag">today</span>}
             </h3>
             {total === 0 && <p className="muted small">Nobody scheduled.</p>}
-            {LEVELS.map(([key, label]) => (
+            {[...LEVELS, ["other", "Other"]].map(([key, label]) => (
               groups[key].length > 0 && (
                 <div key={key} className="agenda-level">
                   <span className="agenda-level-label">{label}</span>
@@ -129,18 +159,6 @@ function AgendaView({ dates, people, byPerson }) {
                 </div>
               )
             ))}
-            {groups.other.length > 0 && (
-              <div className="agenda-level">
-                <span className="agenda-level-label">Other</span>
-                <div className="agenda-people">
-                  {groups.other.map(({ name, s }, i) => (
-                    <span key={i} className={shiftClass(s)} title={shiftTitle(s)}>
-                      {name} · {s.code}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
           </section>
         );
       })}
