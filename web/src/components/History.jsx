@@ -38,7 +38,7 @@ export default function History({ can, onChange }) {
       <ul className="callout-list">
         {rows.map((r) => (
           <li key={r.period}>
-            <span className="who">{r.period.replace("..", " → ")}</span>
+            <span className="who">{r.period.replaceAll("..", " → ")}</span>
             {r.active && <span className="vac-pill vac-approved">active</span>}
             <span className="muted">{r.parsed_sheet} · {r.people} people</span>
             <span className="row gap">
@@ -52,7 +52,7 @@ export default function History({ can, onChange }) {
 
       {viewing && (
         <div className="archive-view">
-          <h3>{sel?.replace("..", " → ")}</h3>
+          <h3>{sel?.replaceAll("..", " → ")}</h3>
           <ScheduleGrid schedule={viewing} />
         </div>
       )}

@@ -115,7 +115,7 @@ export default function Admin({ schedule, onChange }) {
             <span className="trial">+{diff.summary.added} −{diff.summary.removed} ~{diff.summary.changed}</span>
           </h3>
           <p className="muted">
-            {diff.period?.replace("..", " → ")} · {diff.summary.people_affected} people affected.
+            {diff.period?.replaceAll("..", " → ")} · {diff.summary.people_affected} people affected.
           </p>
           <ul className="issue-list">
             {Object.entries(diff.people).slice(0, 30).map(([name, ch]) => (
