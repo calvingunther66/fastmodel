@@ -155,6 +155,23 @@ export default function Coverage({ schedule, onChange }) {
               </li>
             ))}
           </ul>
+
+          {proposal.unavailable_qualified?.length > 0 && (
+            <>
+              <h4>Qualified but off that day</h4>
+              <ul className="cand-list muted-list">
+                {proposal.unavailable_qualified.map((c, i) => (
+                  <li key={i}>
+                    <div className="cand-main">
+                      <span className="cand-name">{c.name}</span>
+                      <span className="cand-reasons">{c.reason}
+                        {c.contact?.length > 0 ? ` · ${c.contact[0]}` : ""}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       )}
 

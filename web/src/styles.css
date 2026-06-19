@@ -436,3 +436,7 @@ button.print-btn { background: none; border: none; color: var(--accent); cursor:
 .vac-denied { background: #fee2e2; color: #991b1b; }
 .vac-pending { background: #fef3c7; color: #92400e; }
 .ghost.small.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* qualified-but-off list (H2) */
+.muted-list li { opacity: 0.75; }
+.muted-list .cand-name { font-weight: 600; }

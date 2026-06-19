@@ -29,6 +29,13 @@ _OFF_STATUS = {"V", "H", "R", "BDAY", "NO"}
 # Status codes that mean a person is explicitly available to be assigned.
 _AVAILABLE_STATUS = {"A", "OK"}
 
+# Human reason for each off-status, shown so a coordinator sees *why* a qualified
+# person is being skipped (rather than them silently vanishing from proposals).
+_OFF_REASON = {
+    "V": "on vacation", "H": "on holiday", "R": "requested off",
+    "BDAY": "birthday off", "NO": "unavailable",
+}
+
 
 def _profiles(schedule: dict) -> dict:
     """Per-person capability profile: which locations they've worked, do nights?"""
@@ -282,6 +289,31 @@ def _move_candidates(schedule, date, code, shift_type, exclude, profiles,
     return out
 
 
+def _unavailable_qualified(schedule, date, code, shift_type, exclude, profiles, roster):
+    """Qualified people who are *off* that day (requested off / vacation / etc).
+
+    Surfaced so the coordinator can see who they can't lean on and why — honouring
+    R/V/H hints explicitly instead of silently dropping those people (H2)."""
+    open_code = (code or "").upper()
+    out = []
+    for p in schedule.get("people", []):
+        cand = p.get("name")
+        if not cand or cand in exclude:
+            continue
+        state, detail = _day_state(_entries_on(p, date))
+        if state != "off":
+            continue
+        prof = profiles.get(cand, {"codes": set(), "nights": False})
+        meta = _meta(roster, cand)
+        if not _qualified_for(open_code, prof, meta):
+            continue  # only mention people who could otherwise have taken it
+        reason = _OFF_REASON.get((detail or "").upper(), "off that day")
+        out.append({"name": cand, "contact": p.get("contact", []),
+                    "off_code": detail, "reason": reason})
+    out.sort(key=lambda c: c["name"])
+    return out
+
+
 def _cascades(schedule, sick_name, date, open_code, open_type, moves, profiles,
               stats=None, cover_avg=0.0, fairness_weight=0.5, roster=None):
     """For each move candidate, find a free backfill for their vacated slot."""
@@ -339,6 +371,8 @@ def propose(schedule: dict, name: str, date: str, shift_type: str,
                              stats, cover_avg, fairness_weight, roster)
     cascades = _cascades(schedule, name, date, open_code.upper(), shift_type, moves,
                          profiles, stats, cover_avg, fairness_weight, roster)
+    unavailable = _unavailable_qualified(schedule, date, open_code, shift_type,
+                                         exclude, profiles, roster)
 
     return {
         "open_shift": {
@@ -351,6 +385,7 @@ def propose(schedule: dict, name: str, date: str, shift_type: str,
         "free_candidates": free[:8],
         "move_candidates": moves[:8],
         "cascades": cascades[:5],
+        "unavailable_qualified": unavailable[:8],
     }
 
 
