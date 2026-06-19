@@ -54,6 +54,7 @@ class ScheduleStore:
         self.vacations_path = data_dir / "vacations.json"
         self.holidays_path = data_dir / "holidays.json"
         self.archive_dir = data_dir / "archive"
+        self.diff_path = data_dir / "last_diff.json"
         self._lock = threading.Lock()
 
     # ---- low-level json helpers ------------------------------------------
@@ -106,6 +107,29 @@ class ScheduleStore:
             })
         out.sort(key=lambda r: r["period"], reverse=True)
         return out
+
+    def _capture_diff(self, new_result: dict) -> None:
+        """Before overwriting a period's archive, diff the new version against the
+        previously-stored one and stash it for the Admin "what changed" view (M2)."""
+        if not getattr(self, "diff_path", None):
+            return
+        period = self._period_key(new_result)
+        prior = self.get_archived(period) if period else None
+        if not prior:
+            return
+        from .diff import diff_schedules
+        result = diff_schedules(prior, new_result)
+        self._write_json(self.diff_path, {
+            "period": period,
+            "at": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "parsed_sheet": new_result.get("parsed_sheet"),
+            **result,
+        })
+
+    def last_diff(self) -> dict | None:
+        if not getattr(self, "diff_path", None) or not self.diff_path.exists():
+            return None
+        return self._read_json(self.diff_path, None)
 
     def get_archived(self, period: str) -> dict | None:
         if not getattr(self, "archive_dir", None) or not self._PERIOD_RE.match(period or ""):
@@ -162,6 +186,7 @@ class ScheduleStore:
             self._write_json(self.schedule_path, result)
             self._ensure_tokens(result)
             self._record_work(result)
+            self._capture_diff(result)
             self._archive(result)
             return result
 
@@ -174,6 +199,7 @@ class ScheduleStore:
             self._write_json(self.schedule_path, result)
             self._ensure_tokens(result)
             self._record_work(result)
+            self._capture_diff(result)
             self._archive(result)
             return result
 
@@ -217,6 +243,7 @@ class ScheduleStore:
             self._write_json(self.schedule_path, result)
             self._ensure_tokens(result)
             self._record_work(result)
+            self._capture_diff(result)
             self._archive(result)
             return result
 

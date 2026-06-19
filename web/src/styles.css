@@ -495,3 +495,8 @@ a.button-link:hover { filter: brightness(1.05); }
 /* schedule history (M1) */
 .history .callout-list li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .archive-view { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+
+/* re-upload diff (M2) */
+.diff-panel .diff-add { color: var(--green); }
+.diff-panel .diff-rem { color: var(--red); }
+.diff-panel .diff-chg { color: var(--mid); }

@@ -308,6 +308,22 @@ def archive_view(period: str, user: dict = Depends(require_auth)):
     return data
 
 
+@app.get("/api/archive/diff")
+def archive_diff(a: str, b: str, user: dict = Depends(require_auth)):
+    """Diff two archived periods (M2)."""
+    from .diff import diff_schedules
+    old, new = store.get_archived(a), store.get_archived(b)
+    if old is None or new is None:
+        raise HTTPException(status_code=404, detail="no such archived period")
+    return {"a": a, "b": b, **diff_schedules(old, new)}
+
+
+@app.get("/api/schedule/last-diff")
+def schedule_last_diff(user: dict = Depends(require_cap("upload"))):
+    """What the most recent re-upload of a period changed (M2)."""
+    return store.last_diff() or {"people": {}, "summary": None}
+
+
 @app.post("/api/archive/activate")
 def archive_activate(payload: dict, user: dict = Depends(require_cap("upload"))):
     period = payload.get("period")

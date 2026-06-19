@@ -109,11 +109,14 @@ export const api = {
   createSchedule: (body) =>
     req("/api/schedule/create", { method: "POST", body: JSON.stringify(body) }),
 
-  // schedule history / archive (M1)
+  // schedule history / archive (M1) + diff (M2)
   archive: () => req("/api/archive"),
   archiveView: (period) => req(`/api/archive/view?period=${encodeURIComponent(period)}`),
   archiveActivate: (period) =>
     req("/api/archive/activate", { method: "POST", body: JSON.stringify({ period }) }),
+  archiveDiff: (a, b) =>
+    req(`/api/archive/diff?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`),
+  lastDiff: () => req("/api/schedule/last-diff"),
 
   // ops dashboard (L2)
   ops: () => req("/api/ops"),
