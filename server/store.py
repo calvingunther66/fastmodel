@@ -78,15 +78,16 @@ class ScheduleStore:
 
     def _archive(self, result: dict) -> None:
         """Keep every saved period so re-uploads don't destroy history (M1)."""
+        archive_dir = getattr(self, "archive_dir", None)
         period = self._period_key(result)
-        if not period or not self._PERIOD_RE.match(period):
+        if not archive_dir or not period or not self._PERIOD_RE.match(period):
             return
-        self.archive_dir.mkdir(parents=True, exist_ok=True)
-        self._write_json(self.archive_dir / f"{period}.json", result)
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        self._write_json(archive_dir / f"{period}.json", result)
 
     def list_archive(self) -> list[dict]:
         """Summaries of all archived periods, newest first; flags the active one."""
-        if not self.archive_dir.exists():
+        if not getattr(self, "archive_dir", None) or not self.archive_dir.exists():
             return []
         active = self._period_key(self.get_raw_schedule() or {})
         out = []
@@ -107,7 +108,7 @@ class ScheduleStore:
         return out
 
     def get_archived(self, period: str) -> dict | None:
-        if not self._PERIOD_RE.match(period or ""):
+        if not getattr(self, "archive_dir", None) or not self._PERIOD_RE.match(period or ""):
             return None
         path = self.archive_dir / f"{period}.json"
         if not path.exists():
