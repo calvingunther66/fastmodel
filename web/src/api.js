@@ -171,4 +171,13 @@ export const api = {
     if (!res.ok) throw new Error((await res.json()).detail || "upload failed");
     return res.json();
   },
+
+  // backup & restore (L1)
+  async restore(file) {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/restore", { method: "POST", credentials: "include", body: fd });
+    if (!res.ok) throw new Error((await res.json()).detail || "restore failed");
+    return res.json();
+  },
 };

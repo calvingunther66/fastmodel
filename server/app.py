@@ -880,6 +880,32 @@ def revoke_token(token_id: str, user: dict = Depends(require_cap("manage_users")
 
 
 # --------------------------------------------------------------------------
+# backup & restore of the whole data directory (L1)
+# --------------------------------------------------------------------------
+@app.get("/api/backup")
+def download_backup(user: dict = Depends(require_cap("manage_users"))):
+    from .backup import backup_filename, make_backup
+    data = make_backup(config.DATA_DIR)
+    audit.log(user["username"], "backup_download", {"bytes": len(data)})
+    return Response(content=data, media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{backup_filename()}"'})
+
+
+@app.post("/api/restore")
+async def upload_restore(file: UploadFile, user: dict = Depends(require_cap("manage_users"))):
+    from .backup import restore_backup
+    if not file.filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="please upload a .zip backup")
+    data = await file.read()
+    try:
+        result = restore_backup(config.DATA_DIR, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    audit.log(user["username"], "backup_restore", result)
+    return {**result, "note": "restart the app to fully apply restored accounts/keys"}
+
+
+# --------------------------------------------------------------------------
 # automation: watch an inbox of spreadsheets and ingest the latest
 # --------------------------------------------------------------------------
 @app.get("/api/automation/status")

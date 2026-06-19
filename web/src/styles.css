@@ -467,3 +467,7 @@ tr.urg-urgent td, tr.urg-past td { box-shadow: inset 3px 0 0 var(--red); }
 
 /* fairness debt (K3) */
 .debt-cell { font-weight: 700; color: var(--mid); }
+
+/* backup & restore (L1) */
+a.button-link { display: inline-block; padding: 8px 14px; background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; font-size: 0.9rem; }
+a.button-link:hover { filter: brightness(1.05); }
