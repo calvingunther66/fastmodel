@@ -601,6 +601,7 @@ class ScheduleStore:
                 callouts.append({
                     "name": name, "date": date, "shift_type": shift_type,
                     "code": code, "reason": reason, "covered_by": None,
+                    "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                 })
                 self._save_callouts(callouts)
 

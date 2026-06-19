@@ -446,3 +446,11 @@ button.print-btn { background: none; border: none; color: var(--accent); cursor:
 .grid .holiday-col .dow { color: #b45309; }
 .agenda-day.holiday { border-left: 3px solid #f59e0b; }
 .holiday-tag { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; background: #fef3c7; color: #92400e; padding: 1px 6px; border-radius: 4px; }
+
+/* open-shift aging (I3) */
+.count-badge { background: var(--red); color: #fff; border-radius: 10px; padding: 0 8px; font-size: 0.78rem; vertical-align: middle; }
+.urg-pill { font-size: 0.7rem; font-weight: 700; padding: 1px 7px; border-radius: 10px; white-space: nowrap; }
+.urg-pill.urg-urgent, .urg-pill.urg-past { background: #fee2e2; color: #991b1b; }
+.urg-pill.urg-soon { background: #fef3c7; color: #92400e; }
+.urg-pill.urg-later { background: var(--panel); color: var(--muted); }
+tr.urg-urgent td, tr.urg-past td { box-shadow: inset 3px 0 0 var(--red); }

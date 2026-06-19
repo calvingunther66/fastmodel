@@ -612,14 +612,28 @@ def _eligible_to_cover(person: str, co: dict) -> tuple[bool, str]:
 
 @app.get("/api/open-shifts")
 def open_shifts(user: dict = Depends(require_auth)):
-    """Call-outs that still need a cover, with this user's eligibility + claim state."""
+    """Call-outs that still need a cover, with this user's eligibility + claim state.
+
+    Each row carries days_until the shift and an urgency band (I3); the list is
+    sorted soonest-first so imminent uncovered shifts surface at the top."""
+    import datetime as _dt
     person = user.get("person")
+    today = _dt.date.today()
     out = []
     for co in store.list_callouts():
         if co.get("covered_by"):
             continue
+        try:
+            days_until = (_dt.date.fromisoformat(co["date"]) - today).days
+        except (ValueError, KeyError, TypeError):
+            days_until = None
+        urgency = "past" if (days_until is not None and days_until < 0) else (
+            "urgent" if (days_until is not None and days_until <= 2) else (
+                "soon" if (days_until is not None and days_until <= 6) else "later"))
         row = {"name": co["name"], "date": co["date"], "shift_type": co["shift_type"],
                "code": co.get("code"), "reason": co.get("reason"),
+               "created_at": co.get("created_at"),
+               "days_until": days_until, "urgency": urgency,
                "claimers": store.claims_for(co["name"], co["date"], co["shift_type"])}
         if person:
             ok, why = _eligible_to_cover(person, co)
@@ -627,6 +641,8 @@ def open_shifts(user: dict = Depends(require_auth)):
             row["eligibility"] = why
             row["claimed_by_me"] = person in row["claimers"]
         out.append(row)
+    out.sort(key=lambda r: (r["days_until"] if r["days_until"] is not None else 9999,
+                            r["name"]))
     return out
 
 
