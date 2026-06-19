@@ -47,8 +47,8 @@ export default function Security({ user, onChange }) {
         Two-factor authentication (TOTP) adds a one-time code from an
         authenticator app on top of your password.
       </p>
-      {err && <div className="error">{err}</div>}
-      {msg && <div className="ok-banner">{msg}</div>}
+      {err && <div className="error" role="alert">{err}</div>}
+      {msg && <div className="ok-banner" role="status">{msg}</div>}
 
       <div className="sec-status">
         Two-factor authentication:{" "}

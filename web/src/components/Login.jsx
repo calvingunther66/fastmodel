@@ -57,7 +57,7 @@ export default function Login({ onLogin }) {
             <span className="muted small">From your authenticator app.</span>
           </label>
         )}
-        {error && <div className="error">{error}</div>}
+        {error && <div className="error" role="alert">{error}</div>}
         <button disabled={busy}>{busy ? "Signing in…" : needOtp ? "Verify" : "Sign in"}</button>
         <button type="button" className="link-btn" onClick={() => setMode("reset")}>
           Have a reset code?
@@ -114,7 +114,7 @@ function ResetForm({ onBack }) {
               New password
               <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} />
             </label>
-            {error && <div className="error">{error}</div>}
+            {error && <div className="error" role="alert">{error}</div>}
             <button disabled={busy}>{busy ? "Saving…" : "Set new password"}</button>
             <button type="button" className="link-btn" onClick={onBack}>Cancel</button>
           </>

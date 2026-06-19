@@ -77,11 +77,13 @@ export default function App() {
 
   return (
     <div className="app">
+      <a className="skip-link" href="#main">Skip to content</a>
       <header>
         <h1>Schedule</h1>
-        <nav>
+        <nav aria-label="Primary">
           {tabs.map((t) => (
             <button key={t.id} className={activeTab === t.id ? "on" : ""}
+              aria-current={activeTab === t.id ? "page" : undefined}
               onClick={() => setTab(t.id)}>{t.label}</button>
           ))}
           <span className="who-am-i">
@@ -108,7 +110,7 @@ export default function App() {
         </div>
       )}
 
-      <main>
+      <main id="main">
         {empty && !["admin", "create", "users"].includes(activeTab) && (
           <p className="muted">
             No schedule loaded yet{can("upload") ? " — go to “Upload” or “Create”." : "."}
