@@ -19,9 +19,16 @@ async function req(path, options = {}) {
 
 export const api = {
   me: () => req("/api/me"),
-  login: (username, password) =>
-    req("/api/login", { method: "POST", body: JSON.stringify({ username, password }) }),
+  login: (username, password, otp) =>
+    req("/api/login", { method: "POST", body: JSON.stringify({ username, password, otp }) }),
   logout: () => req("/api/logout", { method: "POST" }),
+  // password reset (F3) — redeem an admin-issued one-time code
+  resetPassword: (username, code, new_password) =>
+    req("/api/reset-password", { method: "POST", body: JSON.stringify({ username, code, new_password }) }),
+  // two-factor auth (F2)
+  begin2fa: () => req("/api/me/2fa/begin", { method: "POST", body: "{}" }),
+  enable2fa: (otp) => req("/api/me/2fa/enable", { method: "POST", body: JSON.stringify({ otp }) }),
+  disable2fa: (password) => req("/api/me/2fa/disable", { method: "POST", body: JSON.stringify({ password }) }),
   schedule: () => req("/api/schedule"),
   people: () => req("/api/people"),
   reparse: (sheet) =>
@@ -33,6 +40,8 @@ export const api = {
     req(`/api/users/${encodeURIComponent(username)}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteUser: (username) =>
     req(`/api/users/${encodeURIComponent(username)}`, { method: "DELETE" }),
+  resetCode: (username) =>
+    req(`/api/users/${encodeURIComponent(username)}/reset-code`, { method: "POST", body: "{}" }),
 
   // self-service (member)
   availability: () => req("/api/availability"),
@@ -71,6 +80,16 @@ export const api = {
     }),
   clearCallout: (name, date, shift_type) =>
     req("/api/coverage/clear", { method: "POST", body: JSON.stringify({ name, date, shift_type }) }),
+  unassignCover: (name, date, shift_type) =>
+    req("/api/coverage/unassign", { method: "POST", body: JSON.stringify({ name, date, shift_type }) }),
+  applyChain: (open, chain) =>
+    req("/api/coverage/apply-chain", {
+      method: "POST",
+      body: JSON.stringify({
+        name: open.name, date: open.date, shift_type: open.shift_type,
+        steps: chain.steps, backfill: chain.backfill,
+      }),
+    }),
   // API tokens (manage_users)
   tokens: () => req("/api/tokens"),
   createToken: (name, capabilities) =>
@@ -90,6 +109,37 @@ export const api = {
   createSchedule: (body) =>
     req("/api/schedule/create", { method: "POST", body: JSON.stringify(body) }),
 
+  // schedule history / archive (M1) + diff (M2)
+  archive: () => req("/api/archive"),
+  archiveView: (period) => req(`/api/archive/view?period=${encodeURIComponent(period)}`),
+  archiveActivate: (period) =>
+    req("/api/archive/activate", { method: "POST", body: JSON.stringify({ period }) }),
+  archiveDiff: (a, b) =>
+    req(`/api/archive/diff?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`),
+  lastDiff: () => req("/api/schedule/last-diff"),
+
+  // ops dashboard (L2)
+  ops: () => req("/api/ops"),
+
+  // kiosk wall display (J2)
+  kioskToken: () => req("/api/kiosk-token"),
+  rotateKiosk: () => req("/api/kiosk-token/rotate", { method: "POST", body: "{}" }),
+
+  // coverage gap forecaster (K2)
+  forecast: () => req("/api/coverage/forecast"),
+
+  // holiday registry (H3)
+  holidays: () => req("/api/holidays"),
+  addHoliday: (date, label) =>
+    req("/api/holidays", { method: "POST", body: JSON.stringify({ date, label }) }),
+  removeHoliday: (date) =>
+    req(`/api/holidays/${encodeURIComponent(date)}`, { method: "DELETE" }),
+
+  // vacation approvals (H1)
+  vacations: () => req("/api/vacations"),
+  decideVacation: (person, date, status) =>
+    req("/api/vacations/decide", { method: "POST", body: JSON.stringify({ person, date, status }) }),
+
   // validator (A2/A3) + generator (C1) + templates (C3)
   issues: () => req("/api/schedule/issues"),
   generate: (start, end) =>
@@ -99,6 +149,9 @@ export const api = {
     req("/api/templates", { method: "POST", body: JSON.stringify({ name, weekday_levels }) }),
   deleteTemplate: (name) =>
     req(`/api/templates/${encodeURIComponent(name)}`, { method: "DELETE" }),
+
+  // personal change feed (J1)
+  myChanges: () => req("/api/me/changes"),
 
   // member preferences (B4)
   myPrefs: () => req("/api/me/prefs"),
@@ -135,6 +188,15 @@ export const api = {
       body: fd,
     });
     if (!res.ok) throw new Error((await res.json()).detail || "upload failed");
+    return res.json();
+  },
+
+  // backup & restore (L1)
+  async restore(file) {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/restore", { method: "POST", credentials: "include", body: fd });
+    if (!res.ok) throw new Error((await res.json()).detail || "restore failed");
     return res.json();
   },
 };

@@ -3,6 +3,10 @@
 Stored in DATA_DIR/users.json so accounts persist across container rebuilds.
 Passwords are hashed with PBKDF2-HMAC-SHA256 (standard library, no extra deps).
 
+Security extras (all stdlib): optional per-account TOTP 2FA (F2) and admin-issued
+one-time password-reset codes (F3). Login-attempt throttling (F1) lives in
+`server/security.py` and is wired in at the login route.
+
 Roles:
   admin   — can do everything (all capabilities implicitly).
   member  — self-service; may be granted individual capabilities by an admin.
@@ -31,6 +35,10 @@ import threading
 from pathlib import Path
 
 from .config import APP_PASSWORD, APP_USERNAME, DATA_DIR
+from .security import generate_totp_secret, totp_uri, verify_totp
+
+# How long an admin-issued password-reset code stays valid (F3).
+RESET_CODE_TTL_SECONDS = 24 * 3600
 
 CAPABILITIES = [
     "upload",             # upload / re-parse schedules
@@ -88,6 +96,8 @@ def public_view(user: dict) -> dict:
         "person": user.get("person"),
         "capabilities": caps,
         "protected": user.get("protected", False),
+        "totp_enabled": bool(user.get("totp_enabled")),
+        "reset_pending": bool(user.get("reset_code_hash")),
     }
 
 
@@ -192,3 +202,96 @@ class AccountStore:
                 raise ValueError("the bootstrap admin cannot be deleted")
             data["users"] = [u for u in data["users"] if u["username"] != username]
             self._write(data)
+
+    def _mutate(self, username: str, fn):
+        """Run fn(user) inside the lock and persist; returns fn's result."""
+        with self._lock:
+            data = self._read()
+            user = next((u for u in data["users"] if u["username"] == username), None)
+            if user is None:
+                raise KeyError(username)
+            result = fn(user)
+            self._write(data)
+            return result
+
+    # ---- password reset (F3): admin issues a one-time code, user redeems it --
+    def issue_reset_code(self, username: str) -> str:
+        """Mint a one-time reset code for `username` and return it (shown once).
+
+        The admin hands the code to the member out-of-band; the member redeems
+        it at the login screen to choose a new password. No email involved.
+        """
+        code = secrets.token_hex(4).upper()  # 8 hex chars, e.g. 'A1B2C3D4'
+
+        def _set(user):
+            user["reset_code_hash"] = hash_password(code)
+            user["reset_expires"] = dt.datetime.now(dt.timezone.utc).timestamp() + RESET_CODE_TTL_SECONDS
+            return None
+
+        self._mutate(username, _set)
+        return code
+
+    def redeem_reset(self, username: str, code: str, new_password: str) -> dict:
+        """Redeem a reset code and set a new password. Raises ValueError on
+        invalid/expired codes (same message either way, to avoid leaking which)."""
+        if not new_password:
+            raise ValueError("a new password is required")
+
+        def _redeem(user):
+            stored = user.get("reset_code_hash")
+            expires = user.get("reset_expires") or 0
+            now = dt.datetime.now(dt.timezone.utc).timestamp()
+            if not stored or now > expires or not verify_password(code or "", stored):
+                raise ValueError("invalid or expired reset code")
+            user["password_hash"] = hash_password(new_password)
+            user.pop("reset_code_hash", None)
+            user.pop("reset_expires", None)
+            return user
+
+        return self._mutate(username, _redeem)
+
+    # ---- TOTP 2FA (F2): optional per-account, off by default -----------------
+    def begin_totp(self, username: str) -> dict:
+        """Generate (but don't yet enable) a TOTP secret; return enrollment info.
+
+        Enrollment isn't active until `enable_totp` confirms a valid code, so a
+        half-finished enrollment can never lock anyone out."""
+        secret = generate_totp_secret()
+        user = self.get(username)
+        if user is None:
+            raise KeyError(username)
+
+        def _set(u):
+            u["totp_pending_secret"] = secret
+            u["totp_enabled"] = bool(u.get("totp_enabled"))  # unchanged
+            return None
+
+        self._mutate(username, _set)
+        return {"secret": secret, "otpauth_uri": totp_uri(secret, username)}
+
+    def enable_totp(self, username: str, code: str) -> None:
+        """Confirm enrollment by verifying a code against the pending secret."""
+        def _enable(user):
+            secret = user.get("totp_pending_secret")
+            if not secret:
+                raise ValueError("start 2FA enrollment first")
+            if not verify_totp(secret, code):
+                raise ValueError("that code didn't match — check your authenticator app")
+            user["totp_secret"] = secret
+            user["totp_enabled"] = True
+            user.pop("totp_pending_secret", None)
+            return None
+
+        self._mutate(username, _enable)
+
+    def disable_totp(self, username: str) -> None:
+        def _disable(user):
+            user.pop("totp_secret", None)
+            user.pop("totp_pending_secret", None)
+            user["totp_enabled"] = False
+            return None
+
+        self._mutate(username, _disable)
+
+    def verify_totp_code(self, user: dict, code: str) -> bool:
+        return verify_totp(user.get("totp_secret") or "", code or "")
