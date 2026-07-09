@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { api } from "./api.js";
 import Login from "./components/Login.jsx";
 import ScheduleGrid from "./components/ScheduleGrid.jsx";
@@ -37,12 +37,30 @@ function useTheme() {
   return [isDark, () => setTheme(isDark ? "light" : "dark")];
 }
 
+const NAV_GROUPS = [
+  { id: "sched", label: "Schedule", tabs: ["schedule", "calendar", "availability"] },
+  { id: "cover", label: "Coverage", tabs: ["openshifts", "coverage"] },
+  { id: "build", label: "Manage", tabs: ["admin", "create", "roster"] },
+  { id: "admin", label: "Admin", tabs: ["users", "insights", "activity"] },
+  { id: "acct", label: "Account", tabs: ["history", "security"] },
+];
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [authed, setAuthed] = useState(null);
   const [tab, setTab] = useState("schedule");
   const [schedule, setSchedule] = useState(null);
   const [isDark, toggleTheme] = useTheme();
+  const [navOpen, setNavOpen] = useState(null);
+  const navRef = useRef(null);
+
+  useEffect(() => {
+    function onDocClick(e) {
+      if (navRef.current && !navRef.current.contains(e.target)) setNavOpen(null);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
 
   function loadMe() {
     return api.me()
@@ -82,21 +100,44 @@ export default function App() {
   ].filter((t) => t.show);
 
   const activeTab = tabs.some((t) => t.id === tab) ? tab : "schedule";
+  const byId = Object.fromEntries(tabs.map((t) => [t.id, t]));
+  const groups = NAV_GROUPS
+    .map((g) => ({ ...g, tabs: g.tabs.filter((id) => byId[id]) }))
+    .filter((g) => g.tabs.length);
 
   return (
     <div className="app">
       <a className="skip-link" href="#main">Skip to content</a>
       <header>
         <h1>Schedule</h1>
-        <nav aria-label="Primary">
-          {tabs.map((t) => (
-            <button key={t.id} className={activeTab === t.id ? "on" : ""}
-              aria-current={activeTab === t.id ? "page" : undefined}
-              onClick={() => setTab(t.id)}>{t.label}</button>
-          ))}
-          <span className="who-am-i">
-            {user?.username}{user?.person ? ` · ${user.person}` : ""}
-            <span className="role-tag">{role}</span>
+        <nav aria-label="Primary" className="nav-groups" ref={navRef}>
+          {groups.map((g) => {
+            const activeIn = g.tabs.includes(activeTab);
+            const open = navOpen === g.id;
+            return (
+              <div key={g.id} className={`nav-group${activeIn ? " active active-underline" : ""}${open ? " open" : ""}`}>
+                <button type="button" className="nav-group-trigger"
+                  aria-expanded={open}
+                  onClick={() => setNavOpen(open ? null : g.id)}>
+                  {g.label}
+                  <span className="caret">▾</span>
+                </button>
+                {open && (
+                  <div className="nav-group-menu" role="menu">
+                    {g.tabs.map((id) => (
+                      <button key={id} type="button" role="menuitem"
+                        className={`nav-group-item${activeTab === id ? " on" : ""}`}
+                        onClick={() => { setTab(id); setNavOpen(null); }}>
+                        {byId[id].label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <span className="who-am-i-tag">
+            {user?.username}{user?.person ? ` · ${user.person}` : ""} · {role}
           </span>
           <button className="theme-toggle" onClick={toggleTheme}
             aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}

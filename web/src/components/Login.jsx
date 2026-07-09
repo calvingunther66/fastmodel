@@ -36,8 +36,14 @@ export default function Login({ onLogin }) {
   return (
     <div className="center">
       <form className="card login" onSubmit={submit}>
-        <h1>Schedule</h1>
-        <p className="muted">Sign in to view the schedule.</p>
+        <div>
+          <h1>Schedule</h1>
+          <svg width="130" height="8" viewBox="0 0 130 8" style={{ display: "block" }}>
+            <path d="M2 5.5 C 24 2.5, 46 6.5, 66 4 S 108 2.5, 128 5" fill="none"
+              stroke="#D97757" strokeWidth="2.4" strokeLinecap="round" />
+          </svg>
+          <div className="login-tag">the birth center roster, at a glance</div>
+        </div>
         <label>
           Username
           <input value={username} onChange={(e) => setUsername(e.target.value)}
@@ -92,7 +98,13 @@ function ResetForm({ onBack }) {
   return (
     <div className="center">
       <form className="card login" onSubmit={submit}>
-        <h1>Reset password</h1>
+        <div>
+          <h1>Reset password</h1>
+          <svg width="150" height="8" viewBox="0 0 150 8" style={{ display: "block" }}>
+            <path d="M2 5.5 C 26 2.5, 52 6.5, 76 4 S 124 2.5, 148 5" fill="none"
+              stroke="#D97757" strokeWidth="2.4" strokeLinecap="round" />
+          </svg>
+        </div>
         {done ? (
           <>
             <p className="muted">Password updated. You can sign in now.</p>

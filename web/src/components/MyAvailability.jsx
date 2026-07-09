@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
-import { dateRange, timeLabel } from "../utils.js";
+import { dateRange, shiftClass, timeLabel } from "../utils.js";
 
 // Members manage their own availability: call out of assigned shifts, offer days
 // they can cover, and edit their contact info.
@@ -83,7 +83,7 @@ export default function MyAvailability({ schedule, user, onChange }) {
         {shifts.map((s, i) => (
           <li key={i} className={s.available === false ? "out" : ""}>
             <span className="d">{s.date}</span>
-            <span className="c">{s.code}</span>
+            <span className={shiftClass(s)}>{s.code}</span>
             <span className="m">{s.meaning || ""} ({s.shift_type})</span>
             <span className="t">{timeLabel(s)}</span>
             {s.available === false
