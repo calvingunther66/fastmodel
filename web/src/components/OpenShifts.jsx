@@ -24,6 +24,15 @@ export default function OpenShifts({ user, can, onChange }) {
 
   if (err) return <p className="error">{err}</p>;
 
+  function whenLabel(r) {
+    const d = r.days_until;
+    if (d === null || d === undefined) return "—";
+    if (d < 0) return `${-d}d ago`;
+    if (d === 0) return "today";
+    if (d === 1) return "tomorrow";
+    return `in ${d}d`;
+  }
+
   return (
     <div className="open-shifts">
       {canSwaps && (
@@ -46,16 +55,17 @@ export default function OpenShifts({ user, can, onChange }) {
             )}
         </div>
       )}
-      <h2>Open shifts</h2>
+      <h2>Open shifts {rows.length > 0 && <span className="count-badge">{rows.length}</span>}</h2>
       <p className="muted">Shifts someone has called out of that still need a cover.</p>
       {rows.length === 0 ? <p className="muted">No open shifts right now. 🎉</p> : (
       <table className="grid-table">
         <thead>
-          <tr><th>Date</th><th>Shift</th><th>Out</th><th>Status</th><th></th></tr>
+          <tr><th>When</th><th>Date</th><th>Shift</th><th>Out</th><th>Status</th><th></th></tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i}>
+            <tr key={i} className={`urg-${r.urgency}`}>
+              <td><span className={`urg-pill urg-${r.urgency}`}>{whenLabel(r)}</span></td>
               <td>{r.date}</td>
               <td>{r.code || "—"} <span className="muted">({r.shift_type})</span></td>
               <td>{r.name}</td>

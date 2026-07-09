@@ -7,11 +7,13 @@ export default function Admin({ schedule, onChange }) {
   const [busy, setBusy] = useState(false);
   const [auto, setAuto] = useState(null);
   const [issues, setIssues] = useState(null);
+  const [diff, setDiff] = useState(null);
   const sheets = schedule?.available_sheets || [];
 
   useEffect(() => {
     api.automationStatus().then(setAuto).catch(() => setAuto(null));
     api.issues().then(setIssues).catch(() => setIssues(null));
+    api.lastDiff().then(setDiff).catch(() => setDiff(null));
   }, [schedule]);
 
   async function ingestLatest() {
@@ -105,6 +107,29 @@ export default function Admin({ schedule, onChange }) {
       )}
       {issues && issues.summary?.total === 0 && !schedule?.empty && (
         <p className="ok" style={{ marginTop: 8 }}>✓ No schedule issues detected.</p>
+      )}
+
+      {diff && diff.summary && diff.summary.people_affected > 0 && (
+        <div className="issues-panel diff-panel">
+          <h3>Changes from last re-upload
+            <span className="trial">+{diff.summary.added} −{diff.summary.removed} ~{diff.summary.changed}</span>
+          </h3>
+          <p className="muted">
+            {diff.period?.replaceAll("..", " → ")} · {diff.summary.people_affected} people affected.
+          </p>
+          <ul className="issue-list">
+            {Object.entries(diff.people).slice(0, 30).map(([name, ch]) => (
+              <li key={name} className="issue info">
+                <span className="issue-kind">{name}</span>
+                <span>
+                  {ch.added.map((s, i) => <span key={`a${i}`} className="diff-add">+{s.code} {s.date}({s.shift_type}) </span>)}
+                  {ch.removed.map((s, i) => <span key={`r${i}`} className="diff-rem">−{s.code} {s.date}({s.shift_type}) </span>)}
+                  {ch.changed.map((s, i) => <span key={`c${i}`} className="diff-chg">{s.from}→{s.to} {s.date}({s.shift_type}) </span>)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {auto && (

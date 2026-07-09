@@ -150,7 +150,44 @@ roster is still placeholder):
 - **Equity dashboard (D1)** — leaderboard gains nights/weekends/holidays/hours.
   **CSV exports (D2, `server/exports.py`)**. **ICS niceties (D3)** — VALARM reminders,
   LOCATION, categories.
-- **Ops** — `/healthz` (E3). Login lockout / 2FA (F) noted but not in this batch.
+- **Ops** — `/healthz` (E3).
+- **Security trio (F1/F2/F3, `server/security.py`)** — **login lockout** (in-memory
+  failed-attempt throttle, `LOGIN_MAX_ATTEMPTS`/`LOGIN_LOCKOUT_SECONDS`, returns 429
+  with `Retry-After`); **TOTP 2FA** (RFC 6238, stdlib, optional per-account, self-enrol
+  in the Security tab, required at login when enabled); **admin-issued one-time
+  password-reset codes** (no email — admin hands the code over, member redeems it from
+  the sign-in screen). All stdlib, no new deps.
+
+## Round-two batch (G–M, built)
+
+All standard-library / no new runtime deps; each item shipped as its own commit.
+
+- **Phone-first UX & a11y (G)** — dark mode (theme toggle + `prefers-color-scheme`,
+  tokenised CSS vars); responsive layout with a phone-friendly **agenda ("By day")**
+  view; schedule **search/filter** (name, shift-type, "just me", jump-to-today);
+  **print/PDF** view (`@media print` + Print button); accessibility pass (skip link,
+  landmarks, `aria-current`, focus-visible, reduced-motion, alert/status roles).
+- **Exploit parsed data (H)** — **vacation-approval workflow** (H1, decisions override
+  the green-fill, block the generator); **qualified-but-off** people surfaced in cover
+  proposals with a reason (H2); **holiday registry** (H3) highlighting dates + a
+  "worked a holiday" equity metric. (H4 clinic-split still gated on a real sample.)
+- **Coverage depth (I)** — **undo** a cover assignment, reversing the learned step-up
+  (I1); **multi-step (3+) cascades** via a recursive beam search + `apply_chain` (I2);
+  **open-shift aging/urgency** banding + count badge (I3).
+- **Intelligence (K)** — inline-SVG **equity charts + period trend** (K1); a
+  **coverage gap forecaster** (`server/forecast.py`) flagging under-staffed/thin days
+  (K2); a **fairness-debt ledger** feeding the generator so heavy-slot carriers ease
+  off (K3).
+- **Pi resilience (L)** — **backup/restore** the whole data dir (`server/backup.py`,
+  zip, path-traversal-guarded) (L1); an **admin ops dashboard** (`/api/ops`, config +
+  data size + accounts/2FA + automation) (L2).
+- **Pull-only comms (J)** — a personal **"what changed for me"** feed
+  (`audit.for_person` + `_describe_change`) (J1); a no-login **kiosk wall display**
+  at `/kiosk/<token>` (J2); a per-person **Atom feed** at `/feed/<token>.atom` (J3).
+  (Email/SMS push remains deliberately sidelined.)
+- **History (M)** — every saved period is **archived** (`DATA_DIR/archive/`) so
+  re-uploads don't lose months; browse + re-activate past periods (M1); **re-upload
+  diff** (`server/diff.py`) showing added/removed/re-coded shifts (M2).
 
 ## Open items / future work
 
@@ -180,9 +217,9 @@ roster is still placeholder):
   (3+ step) chains, honouring the `R`/note availability hints, and an "undo".
 - **Now built** (see "Big adaptive feature batch" above): CSV export, an open-shift
   "who can cover" view (member claims + approve), shift swaps, the schedule generator,
-  the validator, and member preferences. **Still not built:** push events directly
-  into Google Calendar; notifications (email/push) — deliberately sidelined; the
-  security items (login lockout, admin 2FA, member password-reset flow).
+  the validator, member preferences, and the **security trio** (login lockout, TOTP
+  2FA, admin-issued password-reset codes). **Still not built:** push events directly
+  into Google Calendar; notifications (email/push) — deliberately sidelined.
 - **HTTPS is required** for Apple/Google calendar subscriptions — see `SERVER.md`
   (Caddy snippet). Remember to set `PUBLIC_BASE_URL` to the https domain so the
   generated `.ics` links are correct.

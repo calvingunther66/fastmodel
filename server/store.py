@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import re
 import secrets
 import threading
@@ -51,6 +52,10 @@ class ScheduleStore:
         self.prefs_path = data_dir / "prefs.json"
         self.swaps_path = data_dir / "swaps.json"
         self.templates_path = data_dir / "templates.json"
+        self.vacations_path = data_dir / "vacations.json"
+        self.holidays_path = data_dir / "holidays.json"
+        self.archive_dir = data_dir / "archive"
+        self.diff_path = data_dir / "last_diff.json"
         self._lock = threading.Lock()
 
     # ---- low-level json helpers ------------------------------------------
@@ -61,6 +66,103 @@ class ScheduleStore:
 
     def _write_json(self, path: Path, data) -> None:
         path.write_text(json.dumps(data, indent=2, default=str))
+
+    # ---- period archive (M1) ---------------------------------------------
+    # A period key is "<start>..<end>"; only ISO-date..ISO-date is accepted as a
+    # filename so an archived period can never escape the archive directory.
+    _PERIOD_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2}$")
+
+    @staticmethod
+    def _period_key(result: dict) -> str | None:
+        dr = result.get("date_range") or {}
+        start, end = dr.get("start"), dr.get("end")
+        return f"{start}..{end}" if start and end else None
+
+    def _archive_path(self, period: str | None) -> Path | None:
+        """Resolve ``<period>.json`` inside the archive directory, or return
+        None if the (user-controlled) period fails the strict period pattern or
+        the resolved path would escape the archive directory. The containment
+        check is defence-in-depth beyond ``_PERIOD_RE`` and the guard that keeps
+        this off any path-injection sink."""
+        archive_dir = getattr(self, "archive_dir", None)
+        if not archive_dir or not period or not self._PERIOD_RE.match(period):
+            return None
+        base = os.path.realpath(archive_dir)
+        target = os.path.realpath(os.path.join(base, f"{period}.json"))
+        if os.path.dirname(target) != base:
+            return None
+        return Path(target)
+
+    def _archive(self, result: dict) -> None:
+        """Keep every saved period so re-uploads don't destroy history (M1)."""
+        archive_dir = getattr(self, "archive_dir", None)
+        path = self._archive_path(self._period_key(result))
+        if not archive_dir or path is None:
+            return
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        self._write_json(path, result)
+
+    def list_archive(self) -> list[dict]:
+        """Summaries of all archived periods, newest first; flags the active one."""
+        if not getattr(self, "archive_dir", None) or not self.archive_dir.exists():
+            return []
+        active = self._period_key(self.get_raw_schedule() or {})
+        out = []
+        for f in self.archive_dir.glob("*.json"):
+            try:
+                data = json.loads(f.read_text())
+            except ValueError:
+                continue
+            period = self._period_key(data) or f.stem
+            out.append({
+                "period": period,
+                "parsed_sheet": data.get("parsed_sheet"),
+                "uploaded_at": data.get("uploaded_at"),
+                "people": len([p for p in data.get("people", []) if p.get("name")]),
+                "active": period == active,
+            })
+        out.sort(key=lambda r: r["period"], reverse=True)
+        return out
+
+    def _capture_diff(self, new_result: dict) -> None:
+        """Before overwriting a period's archive, diff the new version against the
+        previously-stored one and stash it for the Admin "what changed" view (M2)."""
+        if not getattr(self, "diff_path", None):
+            return
+        period = self._period_key(new_result)
+        prior = self.get_archived(period) if period else None
+        if not prior:
+            return
+        from .diff import diff_schedules
+        result = diff_schedules(prior, new_result)
+        self._write_json(self.diff_path, {
+            "period": period,
+            "at": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "parsed_sheet": new_result.get("parsed_sheet"),
+            **result,
+        })
+
+    def last_diff(self) -> dict | None:
+        if not getattr(self, "diff_path", None) or not self.diff_path.exists():
+            return None
+        return self._read_json(self.diff_path, None)
+
+    def get_archived(self, period: str) -> dict | None:
+        path = self._archive_path(period)
+        if path is None or not path.exists():
+            return None
+        return json.loads(path.read_text())
+
+    def activate_archived(self, period: str) -> dict | None:
+        """Make an archived period the active schedule again."""
+        data = self.get_archived(period)
+        if data is None:
+            return None
+        with self._lock:
+            self._write_json(self.schedule_path, data)
+            self._ensure_tokens(data)
+            self._record_work(data)
+        return data
 
     # ---- parsing ----------------------------------------------------------
     def _parse(self, sheet_name: str | None):
@@ -98,6 +200,8 @@ class ScheduleStore:
             self._write_json(self.schedule_path, result)
             self._ensure_tokens(result)
             self._record_work(result)
+            self._capture_diff(result)
+            self._archive(result)
             return result
 
     def reparse(self, sheet_name: str) -> dict:
@@ -109,6 +213,8 @@ class ScheduleStore:
             self._write_json(self.schedule_path, result)
             self._ensure_tokens(result)
             self._record_work(result)
+            self._capture_diff(result)
+            self._archive(result)
             return result
 
     def create_schedule(self, title: str, start: str, end: str,
@@ -151,6 +257,8 @@ class ScheduleStore:
             self._write_json(self.schedule_path, result)
             self._ensure_tokens(result)
             self._record_work(result)
+            self._capture_diff(result)
+            self._archive(result)
             return result
 
     def get_raw_schedule(self) -> dict | None:
@@ -165,6 +273,7 @@ class ScheduleStore:
             return None
         sched = apply_overrides(base, self._callouts())  # deep-copies even if empty
         apply_swaps(sched, self._swaps())                 # approved swaps move shifts
+        self._apply_vacation_decisions(sched)             # admin approve/deny over green-fill
         contacts = self._contacts()
         if contacts:
             for p in sched.get("people", []):
@@ -291,6 +400,115 @@ class ScheduleStore:
             self._write_json(self.swaps_path, {"swaps": swaps})
             return found
 
+    # ---- vacation approvals (H1) -----------------------------------------
+    # The workbook marks approved vacation by a green fill (shift["approved"]).
+    # Admins can override per (person, date) here; decisions win over the fill.
+    @staticmethod
+    def _vac_key(person: str, date: str) -> str:
+        return f"{person}|{date}"
+
+    def _vacations(self) -> dict:
+        path = getattr(self, "vacations_path", None)
+        return self._read_json(path, {}) if path else {}
+
+    @staticmethod
+    def _is_vacation(shift: dict) -> bool:
+        return (shift.get("code") or "").upper() == "V"
+
+    def _vacation_status(self, shift: dict, decision: str | None) -> str:
+        """Effective status: admin decision wins, else the workbook's green fill."""
+        if decision in ("approved", "denied"):
+            return decision
+        return "approved" if shift.get("approved") else "pending"
+
+    def _apply_vacation_decisions(self, sched: dict) -> None:
+        """Stamp each V shift with its effective approval (decisions override fill)."""
+        decisions = self._vacations()
+        for p in sched.get("people", []):
+            name = p.get("name")
+            for s in p.get("shifts", []):
+                if not self._is_vacation(s):
+                    continue
+                status = self._vacation_status(s, decisions.get(self._vac_key(name, s["date"])))
+                s["vacation_status"] = status
+                s["approved"] = status == "approved"
+
+    def list_vacations(self) -> list[dict]:
+        """All vacation (V) entries in the active schedule with effective status."""
+        sched = self.get_raw_schedule() or {}
+        decisions = self._vacations()
+        out = []
+        for p in sched.get("people", []):
+            name = p.get("name")
+            if not name:
+                continue
+            for s in p.get("shifts", []):
+                if not self._is_vacation(s):
+                    continue
+                decision = decisions.get(self._vac_key(name, s["date"]))
+                out.append({
+                    "person": name, "date": s["date"],
+                    "from_workbook": bool(s.get("approved")),
+                    "decision": decision,
+                    "status": self._vacation_status(s, decision),
+                })
+        out.sort(key=lambda v: (v["date"], v["person"]))
+        return out
+
+    def set_vacation(self, person: str, date: str, status: str) -> dict:
+        """Record an approve/deny decision, or clear it (status 'pending')."""
+        with self._lock:
+            data = self._vacations()
+            key = self._vac_key(person, date)
+            if status == "pending":
+                data.pop(key, None)
+            elif status in ("approved", "denied"):
+                data[key] = status
+            else:
+                raise ValueError("status must be approved|denied|pending")
+            self._write_json(self.vacations_path, data)
+        return {"person": person, "date": date, "status": status}
+
+    def approved_vacations(self) -> dict:
+        """{NAME_UPPER: {dates}} a person is on *approved* vacation (engine block)."""
+        out: dict[str, set] = {}
+        for v in self.list_vacations():
+            if v["status"] == "approved":
+                out.setdefault(v["person"].upper(), set()).add(v["date"])
+        return out
+
+    # ---- holiday registry (H3) -------------------------------------------
+    # Unit holidays (dates), admin-managed. Drives grid highlighting and the
+    # "worked a holiday" equity metric. Distinct from a person's H status code
+    # (which means *they* have that holiday off).
+    def _holidays(self) -> dict:
+        path = getattr(self, "holidays_path", None)
+        return self._read_json(path, {}) if path else {}
+
+    def list_holidays(self) -> list[dict]:
+        return [{"date": d, "label": lbl}
+                for d, lbl in sorted(self._holidays().items())]
+
+    def holiday_dates(self) -> set:
+        return set(self._holidays().keys())
+
+    def add_holiday(self, date: str, label: str = "") -> dict:
+        try:
+            dt.date.fromisoformat(date)
+        except (ValueError, TypeError):
+            raise ValueError("date must be YYYY-MM-DD")
+        with self._lock:
+            data = self._holidays()
+            data[date] = str(label or "").strip()
+            self._write_json(self.holidays_path, data)
+        return {"date": date, "label": data[date]}
+
+    def remove_holiday(self, date: str) -> None:
+        with self._lock:
+            data = self._holidays()
+            data.pop(date, None)
+            self._write_json(self.holidays_path, data)
+
     # ---- builder templates (C3) ------------------------------------------
     def list_templates(self) -> dict:
         return self._read_json(self.templates_path, {})
@@ -353,6 +571,19 @@ class ScheduleStore:
             c["by_type"][shift_type] = c["by_type"].get(shift_type, 0) + 1
         self._write_json(self.stats_path, stats)
 
+    def _unbump_cover(self, person: str, code: str | None, shift_type: str) -> None:
+        """Reverse a cover step-up (for undo), never dropping below zero."""
+        stats = self._stats()
+        c = stats.get("covers", {}).get(person)
+        if not c:
+            return
+        c["count"] = max(0, c.get("count", 0) - 1)
+        if code and code.upper() in c.get("by_code", {}):
+            c["by_code"][code.upper()] = max(0, c["by_code"][code.upper()] - 1)
+        if shift_type and shift_type in c.get("by_type", {}):
+            c["by_type"][shift_type] = max(0, c["by_type"][shift_type] - 1)
+        self._write_json(self.stats_path, stats)
+
     def aggregated_stats(self) -> dict:
         """Per-person totals across all periods, plus cover step-up counts."""
         stats = self._stats()
@@ -378,12 +609,13 @@ class ScheduleStore:
         computed from the current period's schedule, which retains dates + times."""
         from .validate import shift_hours  # local import avoids a cycle
         sched = self.get_raw_schedule() or {}
+        holiday_dates = self.holiday_dates()
         out: dict[str, dict] = {}
         for p in sched.get("people", []):
             name = p.get("name")
             if not name:
                 continue
-            nights = weekends = holidays = 0
+            nights = weekends = holidays = holidays_worked = 0
             hours = 0.0
             for s in p.get("shifts", []):
                 if (s.get("code") or "").upper() == "H":
@@ -393,13 +625,47 @@ class ScheduleStore:
                 hours += shift_hours(s)
                 if s.get("shift_type") == "night":
                     nights += 1
+                if s.get("date") in holiday_dates:
+                    holidays_worked += 1  # worked a registered unit holiday
                 try:
                     if dt.date.fromisoformat(s["date"]).weekday() >= 5:
                         weekends += 1
                 except (ValueError, KeyError, TypeError):
                     pass
             out[name] = {"nights": nights, "weekends": weekends,
-                         "holidays": holidays, "hours": round(hours, 1)}
+                         "holidays": holidays, "holidays_worked": holidays_worked,
+                         "hours": round(hours, 1)}
+        return out
+
+    def fairness_debt(self) -> dict:
+        """{NAME_UPPER: debt} — how much 'heavy slot' load each person carries.
+
+        Accumulated nights across all periods (kept in history) plus this period's
+        weekends and holidays worked. The generator adds this to a person's seed
+        load so chronic night/weekend carriers are eased off next period (K3)."""
+        agg = self.aggregated_stats()
+        equity = self._equity()
+        names = set(agg["work"]) | set(equity)
+        out = {}
+        for n in names:
+            nights = agg["work"].get(n, {}).get("by_type", {}).get("night", 0)
+            eq = equity.get(n, {})
+            debt = nights + eq.get("weekends", 0) + eq.get("holidays_worked", 0)
+            if debt:
+                out[n.upper()] = debt
+        return out
+
+    def period_trend(self) -> list[dict]:
+        """Total worked shifts per period, oldest first (period keys are
+        'start..end' so lexical order is chronological). Powers the trend chart (K1)."""
+        out = []
+        for period, counts in self._stats().get("work_by_period", {}).items():
+            out.append({
+                "period": period,
+                "shifts": sum(c.get("total", 0) for c in counts.values()),
+                "people": len(counts),
+            })
+        out.sort(key=lambda r: r["period"])
         return out
 
     def leaderboard(self) -> dict:
@@ -407,6 +673,7 @@ class ScheduleStore:
         agg = self.aggregated_stats()
         covers, work = agg["covers"], agg["work"]
         equity = self._equity()
+        debt = self.fairness_debt()
         names = set(covers) | set(work)
         # Include everyone currently on the schedule, even with zero history.
         sched = self.get_raw_schedule() or {}
@@ -426,10 +693,12 @@ class ScheduleStore:
                 "nights": eq.get("nights", 0),
                 "weekends": eq.get("weekends", 0),
                 "holidays": eq.get("holidays", 0),
+                "holidays_worked": eq.get("holidays_worked", 0),
                 "hours": eq.get("hours", 0.0),
+                "debt": debt.get(n.upper(), 0),
             })
         rows.sort(key=lambda r: (-r["covers"], -r["worked_total"], r["name"]))
-        return {"periods": agg["periods"], "people": rows}
+        return {"periods": agg["periods"], "people": rows, "trend": self.period_trend()}
 
     # ---- tunable settings -------------------------------------------------
     def _settings(self) -> dict:
@@ -440,6 +709,45 @@ class ScheduleStore:
             return max(0.0, min(1.0, float(self._settings().get("fairness_weight", 0.5))))
         except (TypeError, ValueError):
             return 0.5
+
+    # ---- kiosk display token (J2) ----------------------------------------
+    def kiosk_token(self) -> str:
+        """Stable token for the no-login wall display; created on first use."""
+        with self._lock:
+            s = self._settings()
+            tok = s.get("kiosk_token")
+            if not tok:
+                tok = secrets.token_urlsafe(12)
+                s["kiosk_token"] = tok
+                self._write_json(self.settings_path, s)
+            return tok
+
+    def rotate_kiosk_token(self) -> str:
+        with self._lock:
+            s = self._settings()
+            s["kiosk_token"] = secrets.token_urlsafe(12)
+            self._write_json(self.settings_path, s)
+            return s["kiosk_token"]
+
+    def kiosk_board(self, date: str) -> dict:
+        """Who's on (by level) for `date`, plus the uncovered shifts from `date` on."""
+        sched = self.get_schedule() or {"people": []}
+        levels = {"day": [], "midshift": [], "night": []}
+        for p in sched.get("people", []):
+            name = p.get("name")
+            for s in p.get("shifts", []):
+                if (s.get("date") == date and s.get("category") == "location"
+                        and s.get("available", True)):
+                    levels.setdefault(s["shift_type"], []).append({
+                        "name": name, "code": s.get("code"),
+                        "covering_for": s.get("covering_for"),
+                    })
+        for v in levels.values():
+            v.sort(key=lambda r: (r["code"] or "", r["name"] or ""))
+        open_shifts = [c for c in self._callouts()
+                       if not c.get("covered_by") and c.get("date", "") >= date]
+        open_shifts.sort(key=lambda c: (c.get("date", ""), c.get("name", "")))
+        return {"date": date, "levels": levels, "open": open_shifts}
 
     def set_fairness_weight(self, value: float) -> float:
         w = max(0.0, min(1.0, float(value)))
@@ -471,6 +779,7 @@ class ScheduleStore:
                 callouts.append({
                     "name": name, "date": date, "shift_type": shift_type,
                     "code": code, "reason": reason, "covered_by": None,
+                    "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                 })
                 self._save_callouts(callouts)
 
@@ -507,11 +816,53 @@ class ScheduleStore:
                        reason=f"moved to cover {name}")
         self.assign_cover(mover, date, from_type, backfill, code=from_code)
 
+    def unassign_cover(self, name: str, date: str, shift_type: str) -> bool:
+        """Undo a cover assignment: the shift goes back to open (call-out kept).
+
+        Also reverses the learned step-up so the fairness picture isn't skewed by a
+        mistaken assignment. Returns True if a cover was actually removed."""
+        with self._lock:
+            callouts = self._callouts()
+            for c in callouts:
+                if self._same(c, name, date, shift_type) and c.get("covered_by"):
+                    prev = c["covered_by"]
+                    c["covered_by"] = None
+                    self._save_callouts(callouts)
+                    self._unbump_cover(prev, c.get("code"), shift_type)
+                    return True
+        return False
+
+    def apply_chain(self, name: str, date: str, shift_type: str,
+                    steps: list[dict], backfill: str) -> None:
+        """Apply an N-step cascade (I2). steps[i] moves a person onto the slot the
+        previous step vacated; the final vacated slot is filled by `backfill`.
+
+        step = {mover, from: {code, shift_type}, onto_code, onto_type}. step[0]
+        moves `mover` onto the open (name/date/shift_type) shift."""
+        if not steps:
+            return
+        # 1) first mover covers the open shift
+        self.assign_cover(name, date, shift_type, steps[0]["mover"],
+                          code=steps[0].get("onto_code"))
+        # 2) each mover vacates their slot; the next mover (or backfill) fills it
+        for i, st in enumerate(steps):
+            frm = st["from"]
+            filler = steps[i + 1]["mover"] if i + 1 < len(steps) else backfill
+            self.mark_sick(st["mover"], date, frm["shift_type"], code=frm.get("code"),
+                           reason=f"moved to cover {st.get('onto_code') or 'shift'}")
+            self.assign_cover(st["mover"], date, frm["shift_type"], filler,
+                              code=frm.get("code"))
+
     def clear_callout(self, name: str, date: str, shift_type: str) -> None:
         with self._lock:
+            removed = [c for c in self._callouts() if self._same(c, name, date, shift_type)]
             callouts = [c for c in self._callouts()
                         if not self._same(c, name, date, shift_type)]
             self._save_callouts(callouts)
+        # If the cleared call-out had a cover, reverse its learned step-up too.
+        for c in removed:
+            if c.get("covered_by"):
+                self._unbump_cover(c["covered_by"], c.get("code"), shift_type)
 
     def _tokens(self) -> dict:
         return self._read_json(self.tokens_path, {})

@@ -29,6 +29,7 @@ from .coverage import propose as propose_coverage
 from .generator import generate as generate_schedule_draft
 from .ical import build_ics
 from .roster import StaffRoster
+from .security import LoginThrottle
 from .store import ScheduleStore
 from .validate import summarize, validate_schedule
 
@@ -46,6 +47,10 @@ audit = AuditLog()
 roster = StaffRoster()
 api_tokens = ApiTokenStore()
 automation = Automation(store)
+login_throttle = LoginThrottle(
+    max_attempts=config.LOGIN_MAX_ATTEMPTS,
+    lockout_seconds=config.LOGIN_LOCKOUT_SECONDS,
+)
 DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 
 
@@ -63,6 +68,7 @@ def require_oversight(request: Request) -> dict:
 class Credentials(BaseModel):
     username: str
     password: str
+    otp: str | None = None
 
 
 def current_user(request: Request) -> dict | None:
@@ -102,12 +108,54 @@ def _own_person(user: dict) -> str:
 
 @app.post("/api/login")
 def login(creds: Credentials, request: Request):
+    key = (creds.username or "").strip().lower()
+
+    # F1: refuse while the account is locked out from repeated failures.
+    retry = login_throttle.retry_after(key)
+    if retry:
+        audit.log(creds.username, "login_locked", {"retry_after": retry})
+        raise HTTPException(
+            status_code=429,
+            detail=f"too many attempts — try again in {retry // 60 + 1} min",
+            headers={"Retry-After": str(retry)},
+        )
+
     user = accounts.authenticate(creds.username, creds.password)
     if not user:
+        locked = login_throttle.record_failure(key)
+        audit.log(creds.username, "login_failed", {"locked": bool(locked)})
         raise HTTPException(status_code=401, detail="invalid credentials")
+
+    # F2: if the account has TOTP enabled, require a valid one-time code.
+    if user.get("totp_enabled"):
+        if not creds.otp:
+            # Prompt for the code without counting it as a failed attempt.
+            raise HTTPException(status_code=401, detail="otp_required")
+        if not accounts.verify_totp_code(user, creds.otp):
+            login_throttle.record_failure(key)
+            audit.log(user["username"], "login_failed", {"reason": "bad_otp"})
+            raise HTTPException(status_code=401, detail="invalid authentication code")
+
+    login_throttle.reset(key)
     request.session["user"] = user["username"]
     audit.log(user["username"], "login")
     return {"authenticated": True, "user": public_view(user)}
+
+
+@app.post("/api/reset-password")
+def reset_password(payload: dict):
+    """Redeem an admin-issued one-time reset code (F3). No auth — the code is
+    the secret. Always returns the same error for bad username/code/expiry."""
+    username = (payload.get("username") or "").strip()
+    code = payload.get("code") or ""
+    new_password = payload.get("new_password") or ""
+    try:
+        accounts.redeem_reset(username, code, new_password)
+    except (KeyError, ValueError):
+        raise HTTPException(status_code=400, detail="invalid or expired reset code")
+    login_throttle.reset(username.lower())
+    audit.log(username, "password_reset_redeemed")
+    return {"ok": True}
 
 
 @app.post("/api/logout")
@@ -122,6 +170,36 @@ def me(request: Request):
     if not user:
         return {"authenticated": False}
     return {"authenticated": True, "user": public_view(user)}
+
+
+# ---- two-factor auth, self-service (F2) ----------------------------------
+@app.post("/api/me/2fa/begin")
+def begin_2fa(request: Request, user: dict = Depends(require_auth)):
+    """Start TOTP enrollment: returns a secret + otpauth URI to add to an app.
+    Not active until confirmed via /enable with a valid code."""
+    info = accounts.begin_totp(user["username"])
+    audit.log(user["username"], "2fa_enroll_begin")
+    return info
+
+
+@app.post("/api/me/2fa/enable")
+def enable_2fa(payload: dict, request: Request, user: dict = Depends(require_auth)):
+    try:
+        accounts.enable_totp(user["username"], payload.get("otp", ""))
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    audit.log(user["username"], "2fa_enabled")
+    return {"ok": True, "totp_enabled": True}
+
+
+@app.post("/api/me/2fa/disable")
+def disable_2fa(payload: dict, request: Request, user: dict = Depends(require_auth)):
+    """Turn off 2FA. Requires the current password (defence in depth)."""
+    if not accounts.authenticate(user["username"], payload.get("password", "")):
+        raise HTTPException(status_code=403, detail="current password required")
+    accounts.disable_totp(user["username"])
+    audit.log(user["username"], "2fa_disabled")
+    return {"ok": True, "totp_enabled": False}
 
 
 # --------------------------------------------------------------------------
@@ -152,6 +230,7 @@ def people(request: Request, user: dict = Depends(require_auth)):
             "shift_count": p["shift_count"],
             "ics_url": url,
             "webcal_url": url.replace("http://", "webcal://").replace("https://", "webcal://"),
+            "feed_url": f"{base}/feed/{p['token']}.atom",
         })
     return out
 
@@ -215,10 +294,104 @@ def create_schedule(payload: dict, user: dict = Depends(require_cap("upload"))):
             "people": len([p for p in result["people"] if p["shifts"]])}
 
 
+@app.get("/api/archive")
+def archive_list(user: dict = Depends(require_auth)):
+    """Summaries of all archived schedule periods (M1)."""
+    return store.list_archive()
+
+
+@app.get("/api/archive/view")
+def archive_view(period: str, user: dict = Depends(require_auth)):
+    data = store.get_archived(period)
+    if data is None:
+        raise HTTPException(status_code=404, detail="no such archived period")
+    return data
+
+
+@app.get("/api/archive/diff")
+def archive_diff(a: str, b: str, user: dict = Depends(require_auth)):
+    """Diff two archived periods (M2)."""
+    from .diff import diff_schedules
+    old, new = store.get_archived(a), store.get_archived(b)
+    if old is None or new is None:
+        raise HTTPException(status_code=404, detail="no such archived period")
+    return {"a": a, "b": b, **diff_schedules(old, new)}
+
+
+@app.get("/api/schedule/last-diff")
+def schedule_last_diff(user: dict = Depends(require_cap("upload"))):
+    """What the most recent re-upload of a period changed (M2)."""
+    return store.last_diff() or {"people": {}, "summary": None}
+
+
+@app.post("/api/archive/activate")
+def archive_activate(payload: dict, user: dict = Depends(require_cap("upload"))):
+    period = payload.get("period")
+    data = store.activate_archived(period or "")
+    if data is None:
+        raise HTTPException(status_code=404, detail="no such archived period")
+    audit.log(user["username"], "activate_archived", {"period": period})
+    return {"ok": True, "parsed_sheet": data.get("parsed_sheet")}
+
+
 @app.get("/api/capabilities")
 def list_capabilities(user: dict = Depends(require_auth)):
     """The delegatable capabilities and the one-click presets, for the Users UI."""
     return {"capabilities": CAPABILITIES, "presets": CAPABILITY_PRESETS}
+
+
+@app.get("/api/vacations")
+def list_vacations(user: dict = Depends(require_auth)):
+    """Vacation (V) entries in the active schedule with effective approval (H1)."""
+    return store.list_vacations()
+
+
+@app.post("/api/vacations/decide")
+def decide_vacation(payload: dict, user: dict = Depends(require_cap("manage_coverage"))):
+    person, date = payload.get("person"), payload.get("date")
+    status = payload.get("status")
+    if not (person and date):
+        raise HTTPException(status_code=400, detail="person and date are required")
+    try:
+        result = store.set_vacation(person, date, status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    audit.log(user["username"], "decide_vacation",
+              {"person": person, "date": date, "status": status})
+    return result
+
+
+@app.get("/api/coverage/forecast")
+def coverage_forecast(user: dict = Depends(require_cap("manage_coverage"))):
+    """Upcoming coverage gaps / single-points-of-failure (K2)."""
+    from .forecast import forecast as run_forecast
+    schedule = store.get_schedule() or {"people": []}
+    return run_forecast(schedule, roster=roster.engine_quals())
+
+
+@app.get("/api/holidays")
+def list_holidays(user: dict = Depends(require_auth)):
+    return store.list_holidays()
+
+
+@app.post("/api/holidays")
+def add_holiday(payload: dict, user: dict = Depends(require_cap("manage_coverage"))):
+    date = payload.get("date")
+    if not date:
+        raise HTTPException(status_code=400, detail="date is required")
+    try:
+        result = store.add_holiday(date, payload.get("label", ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    audit.log(user["username"], "add_holiday", result)
+    return result
+
+
+@app.delete("/api/holidays/{date}")
+def remove_holiday(date: str, user: dict = Depends(require_cap("manage_coverage"))):
+    store.remove_holiday(date)
+    audit.log(user["username"], "remove_holiday", {"date": date})
+    return {"ok": True}
 
 
 @app.get("/api/schedule/issues")
@@ -242,7 +415,9 @@ def schedule_generate(payload: dict, user: dict = Depends(require_cap("generate_
     if not quals:
         raise HTTPException(status_code=400, detail="no staff roster to generate from")
     draft = generate_schedule_draft(start, end, quals, prefs=store.list_prefs(),
-                                    stats=store.aggregated_stats())
+                                    stats=store.aggregated_stats(),
+                                    unavailable=store.approved_vacations(),
+                                    debt=store.fairness_debt())
     audit.log(user["username"], "generate_draft",
               {"start": start, "end": end, "people": draft["report"]["people"]})
     return draft
@@ -352,12 +527,36 @@ def coverage_assign_cascade(payload: dict, user: dict = Depends(require_cap("man
     return {"ok": True, "mover": mover, "backfill": backfill}
 
 
+@app.post("/api/coverage/apply-chain")
+def coverage_apply_chain(payload: dict, user: dict = Depends(require_cap("manage_coverage"))):
+    """Apply a multi-step (3+) cascade chain (I2)."""
+    name, date, shift_type = _coverage_target(payload)
+    steps, backfill = payload.get("steps"), payload.get("backfill")
+    if not steps or not backfill:
+        raise HTTPException(status_code=400, detail="steps and backfill are required")
+    store.apply_chain(name, date, shift_type, steps, backfill)
+    audit.log(user["username"], "apply_chain",
+              {"name": name, "date": date, "shift": shift_type,
+               "depth": len(steps), "backfill": backfill})
+    return {"ok": True}
+
+
 @app.post("/api/coverage/clear")
 def coverage_clear(payload: dict, user: dict = Depends(require_cap("manage_coverage"))):
     name, date, shift_type = _coverage_target(payload)
     store.clear_callout(name, date, shift_type)
     audit.log(user["username"], "clear_callout", {"name": name, "date": date, "shift": shift_type})
     return {"ok": True}
+
+
+@app.post("/api/coverage/unassign")
+def coverage_unassign(payload: dict, user: dict = Depends(require_cap("manage_coverage"))):
+    """Undo a cover assignment: the shift reopens, the call-out stays (I1)."""
+    name, date, shift_type = _coverage_target(payload)
+    undone = store.unassign_cover(name, date, shift_type)
+    audit.log(user["username"], "unassign_cover",
+              {"name": name, "date": date, "shift": shift_type, "undone": undone})
+    return {"ok": True, "reopened": undone}
 
 
 # --------------------------------------------------------------------------
@@ -383,6 +582,52 @@ def my_callout_clear(payload: dict, user: dict = Depends(require_auth)):
         raise HTTPException(status_code=400, detail="date and shift_type are required")
     store.clear_callout(person, date, shift_type)
     return {"ok": True}
+
+
+def _describe_change(person: str, entry: dict) -> str:
+    """A first-person sentence for a personal-feed entry (J1)."""
+    d = entry.get("details") or {}
+    a, action = entry.get("actor"), entry.get("action")
+    date, shift = d.get("date"), d.get("shift")
+    when = f" on {date}" if date else ""
+    sh = f" {shift}" if shift else ""
+    me = person.lower()
+
+    def is_me(key):
+        return str(d.get(key, "")).strip().lower() == me
+
+    if action == "assign_cover":
+        if is_me("name"):
+            return f"Your{sh} shift{when} is now covered by {d.get('covered_by')}."
+        if is_me("covered_by"):
+            return f"You were assigned to cover {d.get('name')}'s{sh} shift{when}."
+    if action == "unassign_cover" and is_me("name"):
+        return f"Cover for your{sh} shift{when} was undone — it's open again."
+    if action in ("mark_sick", "self_callout") and (is_me("name") or is_me("person")):
+        return f"You were marked out{sh}{when}."
+    if action == "clear_callout" and is_me("name"):
+        return f"Your call-out{sh}{when} was cleared."
+    if action == "decide_vacation" and is_me("person"):
+        return f"Your vacation{when} was {d.get('status', 'updated')}."
+    if action == "approve_claim" and is_me("claimer"):
+        return f"Your offer to cover {d.get('name')}'s{sh} shift{when} was approved."
+    if action == "decide_swap" and (is_me("a_person") or is_me("b_person")):
+        return f"A swap involving you was {d.get('decision', 'updated')}."
+    if action == "propose_swap" and is_me("with"):
+        return f"{a} proposed a shift swap with you."
+    if action in ("apply_chain", "assign_cascade") and (is_me("mover") or is_me("backfill")):
+        return f"You were moved to help cover a shift{when}."
+    # generic fallback
+    return f"{action.replace('_', ' ')}{when}."
+
+
+@app.get("/api/me/changes")
+def my_changes(user: dict = Depends(require_auth)):
+    """A personal 'what changed for me' feed (J1), newest first."""
+    person = _own_person(user)
+    entries = audit.for_person(person)
+    return [{"ts": e["ts"], "action": e["action"],
+             "summary": _describe_change(person, e)} for e in entries]
 
 
 @app.get("/api/availability")
@@ -463,14 +708,28 @@ def _eligible_to_cover(person: str, co: dict) -> tuple[bool, str]:
 
 @app.get("/api/open-shifts")
 def open_shifts(user: dict = Depends(require_auth)):
-    """Call-outs that still need a cover, with this user's eligibility + claim state."""
+    """Call-outs that still need a cover, with this user's eligibility + claim state.
+
+    Each row carries days_until the shift and an urgency band (I3); the list is
+    sorted soonest-first so imminent uncovered shifts surface at the top."""
+    import datetime as _dt
     person = user.get("person")
+    today = _dt.date.today()
     out = []
     for co in store.list_callouts():
         if co.get("covered_by"):
             continue
+        try:
+            days_until = (_dt.date.fromisoformat(co["date"]) - today).days
+        except (ValueError, KeyError, TypeError):
+            days_until = None
+        urgency = "past" if (days_until is not None and days_until < 0) else (
+            "urgent" if (days_until is not None and days_until <= 2) else (
+                "soon" if (days_until is not None and days_until <= 6) else "later"))
         row = {"name": co["name"], "date": co["date"], "shift_type": co["shift_type"],
                "code": co.get("code"), "reason": co.get("reason"),
+               "created_at": co.get("created_at"),
+               "days_until": days_until, "urgency": urgency,
                "claimers": store.claims_for(co["name"], co["date"], co["shift_type"])}
         if person:
             ok, why = _eligible_to_cover(person, co)
@@ -478,6 +737,8 @@ def open_shifts(user: dict = Depends(require_auth)):
             row["eligibility"] = why
             row["claimed_by_me"] = person in row["claimers"]
         out.append(row)
+    out.sort(key=lambda r: (r["days_until"] if r["days_until"] is not None else 9999,
+                            r["name"]))
     return out
 
 
@@ -649,6 +910,17 @@ def update_user(username: str, payload: dict, user: dict = Depends(require_cap("
     return public_view(updated)
 
 
+@app.post("/api/users/{username}/reset-code")
+def issue_reset_code(username: str, user: dict = Depends(require_cap("manage_users"))):
+    """Mint a one-time reset code to hand to a member (F3). Shown once."""
+    try:
+        code = accounts.issue_reset_code(username)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="no such user")
+    audit.log(user["username"], "issue_reset_code", {"username": username})
+    return {"username": username, "code": code, "expires_hours": 24}
+
+
 @app.delete("/api/users/{username}")
 def delete_user(username: str, user: dict = Depends(require_cap("manage_users"))):
     try:
@@ -692,6 +964,32 @@ def revoke_token(token_id: str, user: dict = Depends(require_cap("manage_users")
     api_tokens.revoke(token_id)
     audit.log(user["username"], "token_revoke", {"id": token_id})
     return {"ok": True}
+
+
+# --------------------------------------------------------------------------
+# backup & restore of the whole data directory (L1)
+# --------------------------------------------------------------------------
+@app.get("/api/backup")
+def download_backup(user: dict = Depends(require_cap("manage_users"))):
+    from .backup import backup_filename, make_backup
+    data = make_backup(config.DATA_DIR)
+    audit.log(user["username"], "backup_download", {"bytes": len(data)})
+    return Response(content=data, media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{backup_filename()}"'})
+
+
+@app.post("/api/restore")
+async def upload_restore(file: UploadFile, user: dict = Depends(require_cap("manage_users"))):
+    from .backup import restore_backup
+    if not file.filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="please upload a .zip backup")
+    data = await file.read()
+    try:
+        result = restore_backup(config.DATA_DIR, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    audit.log(user["username"], "backup_restore", result)
+    return {**result, "note": "restart the app to fully apply restored accounts/keys"}
 
 
 # --------------------------------------------------------------------------
@@ -761,11 +1059,167 @@ def healthz():
     schedule = store.get_raw_schedule()
     return {
         "ok": True,
+        "version": config.APP_VERSION,
         "has_schedule": schedule is not None,
         "active_sheet": (schedule or {}).get("parsed_sheet"),
         "uploaded_at": (schedule or {}).get("uploaded_at"),
         "people": len([p for p in (schedule or {}).get("people", []) if p.get("name")]),
     }
+
+
+# --------------------------------------------------------------------------
+# ops dashboard (admins) — config + data + health at a glance (L2)
+# --------------------------------------------------------------------------
+@app.get("/api/ops")
+def ops(user: dict = Depends(require_cap("manage_users"))):
+    import os
+    schedule = store.get_raw_schedule() or {}
+    accts = accounts.list()
+    # data-dir size + file inventory
+    total = 0
+    files = []
+    for root, _dirs, names in os.walk(config.DATA_DIR):
+        for n in names:
+            fp = Path(root) / n
+            try:
+                size = fp.stat().st_size
+            except OSError:
+                continue
+            total += size
+            rel = str(fp.relative_to(config.DATA_DIR))
+            if not rel.startswith("inbox/"):
+                files.append({"name": rel, "bytes": size})
+    files.sort(key=lambda f: -f["bytes"])
+    return {
+        "version": config.APP_VERSION,
+        "config": {
+            "timezone": config.TIMEZONE,
+            "public_base_url": config.PUBLIC_BASE_URL or None,
+            "session_https_only": config.SESSION_HTTPS_ONLY,
+            "auto_ingest": config.AUTO_INGEST,
+            "login_max_attempts": config.LOGIN_MAX_ATTEMPTS,
+            "login_lockout_seconds": config.LOGIN_LOCKOUT_SECONDS,
+            "using_default_password": config.USING_DEFAULT_PASSWORD,
+            "data_dir": str(config.DATA_DIR),
+        },
+        "data": {"total_bytes": total, "files": files[:25]},
+        "schedule": {
+            "active_sheet": schedule.get("parsed_sheet"),
+            "uploaded_at": schedule.get("uploaded_at"),
+            "people": len([p for p in schedule.get("people", []) if p.get("name")]),
+        },
+        "accounts": {
+            "total": len(accts),
+            "admins": len([u for u in accts if u.get("role") == "admin"]),
+            "with_2fa": len([u for u in accts if u.get("totp_enabled")]),
+        },
+        "tokens": len(api_tokens.list()),
+        "automation": automation.status(),
+    }
+
+
+# --------------------------------------------------------------------------
+# kiosk wall display (J2): no-login, token-protected, auto-refreshing board
+# --------------------------------------------------------------------------
+@app.get("/api/kiosk-token")
+def kiosk_token_info(request: Request, user: dict = Depends(require_cap("manage_users"))):
+    token = store.kiosk_token()
+    return {"token": token, "url": f"{_ics_base(request)}/kiosk/{token}"}
+
+
+@app.post("/api/kiosk-token/rotate")
+def kiosk_token_rotate(request: Request, user: dict = Depends(require_cap("manage_users"))):
+    token = store.rotate_kiosk_token()
+    audit.log(user["username"], "kiosk_rotate")
+    return {"token": token, "url": f"{_ics_base(request)}/kiosk/{token}"}
+
+
+def _kiosk_html(board: dict) -> str:
+    import datetime as _dt
+    from html import escape
+    pretty = _dt.date.fromisoformat(board["date"]).strftime("%A, %B %-d")
+    labels = [("day", "Day"), ("midshift", "Mid"), ("night", "Night")]
+    cols = []
+    for key, label in labels:
+        rows = board["levels"].get(key, [])
+        items = "".join(
+            f'<li><b>{escape(r["code"] or "")}</b> {escape(r["name"] or "")}'
+            + (f' <span class="cov">↺ {escape(r["covering_for"])}</span>' if r.get("covering_for") else "")
+            + "</li>"
+            for r in rows) or '<li class="none">—</li>'
+        cols.append(f'<section><h2>{label}</h2><ul>{items}</ul></section>')
+    open_n = len(board["open"])
+    open_html = ""
+    if open_n:
+        items = "".join(
+            f'<li>{escape(c.get("date",""))} · {escape((c.get("code") or "?"))}'
+            f' ({escape(c.get("shift_type",""))}) — {escape(c.get("name",""))}</li>'
+            for c in board["open"][:8])
+        open_html = f'<div class="open"><h2>⚠ Needs coverage ({open_n})</h2><ul>{items}</ul></div>'
+    return f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="60">
+<title>On today — {escape(pretty)}</title>
+<style>
+  body {{ margin:0; font-family: system-ui, sans-serif; background:#0f141b; color:#e6eaf0; }}
+  header {{ padding:24px 32px; border-bottom:1px solid #2a3441; }}
+  header h1 {{ margin:0; font-size:2.2rem; }}
+  header .d {{ color:#93a0b2; font-size:1.3rem; }}
+  .board {{ display:flex; gap:24px; padding:24px 32px; flex-wrap:wrap; }}
+  section {{ flex:1; min-width:240px; }}
+  section h2 {{ font-size:1.4rem; color:#7aa2ff; border-bottom:2px solid #2a3441; padding-bottom:6px; }}
+  ul {{ list-style:none; padding:0; margin:0; }}
+  li {{ font-size:1.5rem; padding:8px 0; border-bottom:1px solid #1b232e; }}
+  li b {{ color:#fff; }}
+  .none {{ color:#5b6675; }}
+  .cov {{ color:#34d399; font-size:1rem; }}
+  .open {{ margin:0 32px 32px; padding:16px 24px; background:#3a1d1d; border-radius:12px; }}
+  .open h2 {{ color:#f87171; margin:0 0 8px; }}
+  .open li {{ border-bottom:1px solid #4a2a2a; }}
+</style></head><body>
+<header><h1>On today</h1><div class="d">{escape(pretty)}</div></header>
+<div class="board">{''.join(cols)}</div>
+{open_html}
+</body></html>"""
+
+
+@app.get("/kiosk/{token}")
+def kiosk(token: str):
+    import datetime as _dt
+    if token != store.kiosk_token():
+        raise HTTPException(status_code=404, detail="unknown display")
+    board = store.kiosk_board(_dt.date.today().isoformat())
+    return Response(content=_kiosk_html(board), media_type="text/html; charset=utf-8")
+
+
+# --------------------------------------------------------------------------
+# per-person Atom feed of schedule changes (J3) — pull-based, token is the secret
+# --------------------------------------------------------------------------
+@app.get("/feed/{token}.atom")
+def person_feed(token: str):
+    from xml.sax.saxutils import escape
+    person = store.person_by_token(token)
+    if person is None:
+        raise HTTPException(status_code=404, detail="unknown feed")
+    name = person["name"]
+    entries = audit.for_person(name)
+    updated = entries[0]["ts"] if entries else "1970-01-01T00:00:00+00:00"
+    items = []
+    for i, e in enumerate(entries[:50]):
+        summary = escape(_describe_change(name, e))
+        items.append(
+            f"<entry><title>{summary}</title>"
+            f"<id>urn:fastmodel:change:{escape(token)}:{escape(e['ts'])}:{i}</id>"
+            f"<updated>{escape(e['ts'])}</updated>"
+            f"<content type=\"text\">{summary}</content></entry>")
+    feed = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<feed xmlns="http://www.w3.org/2005/Atom">'
+        f"<title>Schedule updates — {escape(name)}</title>"
+        f"<id>urn:fastmodel:feed:{escape(token)}</id>"
+        f"<updated>{escape(updated)}</updated>"
+        + "".join(items) + "</feed>")
+    return Response(content=feed, media_type="application/atom+xml; charset=utf-8")
 
 
 # --------------------------------------------------------------------------

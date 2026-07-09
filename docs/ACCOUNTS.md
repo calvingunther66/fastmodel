@@ -71,14 +71,41 @@ creating the account or later from the Users screen.
 Admins (or anyone with `manage_coverage`) can do all of the above for anyone, plus
 the full Coverage workflow (proposals, assign, cascades).
 
+## Account security (F1/F2/F3)
+
+All standard-library — no extra dependencies.
+
+- **Login lockout (F1).** Repeated failed logins for a username are throttled
+  in-memory: after `LOGIN_MAX_ATTEMPTS` (default 5) the account is locked for
+  `LOGIN_LOCKOUT_SECONDS` (default 900s), and `/api/login` returns `429` with a
+  `Retry-After` header. A successful login (or the lapse of the window) clears it.
+  The counter is per-process, so a restart resets it (fine for the single-container
+  Pi deploy). Tune via env vars.
+- **Two-factor auth (F2, TOTP).** Any user can turn on TOTP from the **Security**
+  tab: it shows a secret + `otpauth://` URI to add to an authenticator app, then
+  asks for a 6-digit code to confirm (so a half-finished enrolment can't lock you
+  out). Once enabled, login requires the current code — the API responds
+  `401 {"detail":"otp_required"}` to prompt for it, then verifies it (±1 time-step
+  for clock drift). Turning 2FA off requires the account password. Admins are
+  encouraged to enable it. Secrets live in `users.json`; `public_view` only exposes
+  `totp_enabled`, never the secret.
+- **Password reset codes (F3).** No email channel, so reset is admin-mediated: an
+  admin clicks **reset code** on the Users screen to mint a one-time code (valid 24h),
+  hands it to the member privately, and the member redeems it from the **“Have a
+  reset code?”** link on the sign-in screen to choose a new password. The code is
+  stored hashed (PBKDF2) with an expiry and is single-use. Admins can still set a
+  password directly via the **password** button.
+
 ## Where it lives in code
 
 | Concern | Code |
 |---------|------|
 | Accounts, hashing, roles/caps | `server/accounts.py` (`AccountStore`, `hash_password`, `has_cap`) |
+| Login throttle + TOTP helpers | `server/security.py` (`LoginThrottle`, `verify_totp`) |
 | Auth + capability gating | `server/app.py` (`require_auth`, `require_cap`) |
 | Offers / contacts / call-outs | `server/store.py` (+ `server/coverage.py` for proposals) |
 | Account UI | `web/src/components/Users.jsx` |
+| 2FA / reset UI | `web/src/components/Security.jsx`, `web/src/components/Login.jsx` |
 | Self-service UI | `web/src/components/MyAvailability.jsx` |
 
 Passwords are hashed with PBKDF2-HMAC-SHA256 (standard library). Session cookies

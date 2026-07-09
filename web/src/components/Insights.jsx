@@ -1,5 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api.js";
+import { EquityBars, Sparkline } from "./Charts.jsx";
+
+const EQUITY_METRICS = [
+  { key: "nights", label: "Nights", color: "var(--night)" },
+  { key: "weekends", label: "Weekends", color: "var(--mid)" },
+  { key: "holidays_worked", label: "Holidays", color: "#f59e0b" },
+];
 
 // Dashboard for admins / coordinators. The leaderboard (who steps up most) and
 // the scoring slider are gated by separate capabilities, so each can be delegated
@@ -69,7 +76,9 @@ export default function Insights({ can }) {
             <thead>
               <tr>
                 <th>#</th><th>Person</th><th>Covers</th><th>Cover types</th>
-                <th>Shifts worked</th><th>Nights</th><th>Weekends</th><th>Hours</th>
+                <th>Shifts worked</th><th>Nights</th><th>Weekends</th>
+                <th title="Worked on a registered unit holiday">Holidays</th><th>Hours</th>
+                <th title="Heavy-slot debt: the generator eases these people off next period">Debt</th>
                 <th>Work mix</th>
               </tr>
             </thead>
@@ -88,12 +97,14 @@ export default function Insights({ can }) {
                   <td>{p.worked_total}</td>
                   <td>{p.nights ?? 0}</td>
                   <td>{p.weekends ?? 0}</td>
+                  <td>{p.holidays_worked ?? 0}</td>
                   <td>{p.hours ?? 0}</td>
+                  <td className="debt-cell">{p.debt ?? 0}</td>
                   <td className="mix">{breakdown(p.worked_by_code)}</td>
                 </tr>
               ))}
               {people.length === 0 && !err && (
-                <tr><td colSpan={9} className="muted">No history yet.</td></tr>
+                <tr><td colSpan={11} className="muted">No history yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -101,6 +112,21 @@ export default function Insights({ can }) {
             Nights / weekends / hours are for the active period (the equity view) —
             use them to spot who’s carrying the heavy slots.
           </p>
+
+          {people.length > 0 && (
+            <div className="charts-row">
+              <div>
+                <h3>Heavy-slot balance</h3>
+                <EquityBars rows={people} metrics={EQUITY_METRICS} />
+              </div>
+              {data?.trend?.length > 1 && (
+                <div>
+                  <h3>Shifts per period</h3>
+                  <Sparkline points={data.trend} label={`${data.trend.length} periods on record`} />
+                </div>
+              )}
+            </div>
+          )}
         </>
       ) : (
         <p className="muted">You can tune the scoring dial but not view the leaderboard.</p>

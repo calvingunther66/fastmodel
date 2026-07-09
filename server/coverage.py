@@ -29,6 +29,13 @@ _OFF_STATUS = {"V", "H", "R", "BDAY", "NO"}
 # Status codes that mean a person is explicitly available to be assigned.
 _AVAILABLE_STATUS = {"A", "OK"}
 
+# Human reason for each off-status, shown so a coordinator sees *why* a qualified
+# person is being skipped (rather than them silently vanishing from proposals).
+_OFF_REASON = {
+    "V": "on vacation", "H": "on holiday", "R": "requested off",
+    "BDAY": "birthday off", "NO": "unavailable",
+}
+
 
 def _profiles(schedule: dict) -> dict:
     """Per-person capability profile: which locations they've worked, do nights?"""
@@ -282,6 +289,31 @@ def _move_candidates(schedule, date, code, shift_type, exclude, profiles,
     return out
 
 
+def _unavailable_qualified(schedule, date, code, shift_type, exclude, profiles, roster):
+    """Qualified people who are *off* that day (requested off / vacation / etc).
+
+    Surfaced so the coordinator can see who they can't lean on and why — honouring
+    R/V/H hints explicitly instead of silently dropping those people (H2)."""
+    open_code = (code or "").upper()
+    out = []
+    for p in schedule.get("people", []):
+        cand = p.get("name")
+        if not cand or cand in exclude:
+            continue
+        state, detail = _day_state(_entries_on(p, date))
+        if state != "off":
+            continue
+        prof = profiles.get(cand, {"codes": set(), "nights": False})
+        meta = _meta(roster, cand)
+        if not _qualified_for(open_code, prof, meta):
+            continue  # only mention people who could otherwise have taken it
+        reason = _OFF_REASON.get((detail or "").upper(), "off that day")
+        out.append({"name": cand, "contact": p.get("contact", []),
+                    "off_code": detail, "reason": reason})
+    out.sort(key=lambda c: c["name"])
+    return out
+
+
 def _cascades(schedule, sick_name, date, open_code, open_type, moves, profiles,
               stats=None, cover_avg=0.0, fairness_weight=0.5, roster=None):
     """For each move candidate, find a free backfill for their vacated slot."""
@@ -315,6 +347,61 @@ def _cascades(schedule, sick_name, date, open_code, open_type, moves, profiles,
     return cascades
 
 
+def _deep_cascades(schedule, sick_name, date, open_code, open_type, profiles,
+                   stats=None, cover_avg=0.0, fairness_weight=0.5, roster=None,
+                   max_depth=3, beam=2):
+    """Multi-step chains: move a qualified person onto the open shift, then fill
+    their vacated slot — recursively, up to `max_depth` moves — ending in a free
+    backfill. Extends the 2-step cascade for thin, qualification-constrained pools
+    (I2). `beam` caps branching to keep the search small."""
+    open_code = (open_code or "").upper()
+
+    def label(code, st):
+        return f"{decode(code)['meaning'] if code else code or '?'} ({st})"
+
+    def fill(need_code, need_type, exclude, depth):
+        """Plans to fill (need_code, need_type). Each: {ops, backfill, score}."""
+        plans = []
+        # terminal: a *free* qualified person just takes this slot
+        frees = [f for f in _free_candidates(
+            schedule, date, need_code, need_type, exclude, profiles, stats=stats,
+            cover_avg=cover_avg, fairness_weight=fairness_weight, roster=roster)
+            if f["qualified"]]
+        if frees:
+            plans.append({"ops": [], "backfill": frees[0]["name"], "score": frees[0]["score"]})
+        # recursive: move a qualified worker here, then fill *their* slot
+        if depth > 0:
+            for m in _move_candidates(schedule, date, need_code, need_type, exclude,
+                                      profiles, stats, cover_avg, fairness_weight, roster)[:beam]:
+                frm = m["from"]
+                for sub in fill((frm.get("code") or "").upper(), frm["shift_type"],
+                                exclude | {m["name"]}, depth - 1)[:beam]:
+                    op = {"mover": m["name"], "from": frm,
+                          "onto_code": need_code, "onto_type": need_type,
+                          "contact": m.get("contact", [])}
+                    plans.append({"ops": [op] + sub["ops"], "backfill": sub["backfill"],
+                                  "score": m["score"] + sub["score"]})
+        plans.sort(key=lambda p: -p["score"])
+        return plans[:beam]
+
+    chains = []
+    for plan in fill(open_code, open_type, {sick_name}, max_depth):
+        if len(plan["ops"]) < 2:
+            continue  # 0 ops = plain free assign; 1 op = the existing 2-step cascade
+        steps = plan["ops"]
+        parts = []
+        for st in steps:
+            parts.append(f"move {st['mover']} → {label(st['onto_code'], st['onto_type'])}")
+        parts.append(f"backfill {label(steps[-1]['from'].get('code'), steps[-1]['from']['shift_type'])} "
+                     f"with {plan['backfill']}")
+        chains.append({
+            "steps": steps, "backfill": plan["backfill"],
+            "summary": "; ".join(parts) + ".", "score": plan["score"],
+        })
+    chains.sort(key=lambda c: -c["score"])
+    return chains
+
+
 def propose(schedule: dict, name: str, date: str, shift_type: str,
             offered=frozenset(), stats=None, fairness_weight=0.5, roster=None) -> dict:
     """Return coverage proposals for the open shift (name, date, shift_type).
@@ -339,6 +426,10 @@ def propose(schedule: dict, name: str, date: str, shift_type: str,
                              stats, cover_avg, fairness_weight, roster)
     cascades = _cascades(schedule, name, date, open_code.upper(), shift_type, moves,
                          profiles, stats, cover_avg, fairness_weight, roster)
+    unavailable = _unavailable_qualified(schedule, date, open_code, shift_type,
+                                         exclude, profiles, roster)
+    deep = _deep_cascades(schedule, name, date, open_code.upper(), shift_type,
+                          profiles, stats, cover_avg, fairness_weight, roster)
 
     return {
         "open_shift": {
@@ -351,6 +442,8 @@ def propose(schedule: dict, name: str, date: str, shift_type: str,
         "free_candidates": free[:8],
         "move_candidates": moves[:8],
         "cascades": cascades[:5],
+        "deep_cascades": deep[:3],
+        "unavailable_qualified": unavailable[:8],
     }
 
 

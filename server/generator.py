@@ -55,13 +55,20 @@ def _history_load(stats: dict | None) -> dict:
 
 def generate(start: str, end: str, roster_quals: dict, *,
              prefs: dict | None = None, stats: dict | None = None,
-             requirements=None) -> dict:
+             requirements=None, unavailable: dict | None = None,
+             debt: dict | None = None) -> dict:
     """Return assignments {person: {date: {level: code}}} and a coverage report.
 
     `roster_quals` is {NAME: {clinics, works_nights, employment, seniority}}.
+    `unavailable` is {NAME_UPPER: {dates}} a person must not be scheduled (e.g.
+    approved vacation) — a hard block.
+    `debt` is {NAME_UPPER: heavy-slot debt} added to a person's seed load so
+    chronic night/weekend carriers are eased off next period (K3).
     """
     prefs = prefs or {}
     reqs = requirements or DEFAULT_REQUIREMENTS
+    unavailable = unavailable or {}
+    debt = debt or {}
     dates = _dates(start, end)
 
     # fairness counters: history load seeds it so chronic coverers start "ahead".
@@ -69,6 +76,7 @@ def generate(start: str, end: str, roster_quals: dict, *,
     people = list(roster_quals.keys())
     for n in people:
         load.setdefault(n, 0)
+        load[n] += debt.get(n.upper(), 0)  # heavy-slot debt eases them off
 
     assignments: dict[str, dict] = {}
     last_day: dict[str, dt.date] = {}
@@ -82,6 +90,8 @@ def generate(start: str, end: str, roster_quals: dict, *,
         meta = roster_quals[name]
         if name in assigned_today:
             return False
+        if date in unavailable.get(name.upper(), ()):
+            return False  # hard block: approved vacation / explicitly unavailable
         if meta.get("clinics") and loc not in meta["clinics"]:
             return False
         if level == "night" and not meta.get("works_nights", True):
