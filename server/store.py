@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import re
 import secrets
 import threading
@@ -77,14 +78,29 @@ class ScheduleStore:
         start, end = dr.get("start"), dr.get("end")
         return f"{start}..{end}" if start and end else None
 
+    def _archive_path(self, period: str | None) -> Path | None:
+        """Resolve ``<period>.json`` inside the archive directory, or return
+        None if the (user-controlled) period fails the strict period pattern or
+        the resolved path would escape the archive directory. The containment
+        check is defence-in-depth beyond ``_PERIOD_RE`` and the guard that keeps
+        this off any path-injection sink."""
+        archive_dir = getattr(self, "archive_dir", None)
+        if not archive_dir or not period or not self._PERIOD_RE.match(period):
+            return None
+        base = os.path.realpath(archive_dir)
+        target = os.path.realpath(os.path.join(base, f"{period}.json"))
+        if os.path.dirname(target) != base:
+            return None
+        return Path(target)
+
     def _archive(self, result: dict) -> None:
         """Keep every saved period so re-uploads don't destroy history (M1)."""
         archive_dir = getattr(self, "archive_dir", None)
-        period = self._period_key(result)
-        if not archive_dir or not period or not self._PERIOD_RE.match(period):
+        path = self._archive_path(self._period_key(result))
+        if not archive_dir or path is None:
             return
         archive_dir.mkdir(parents=True, exist_ok=True)
-        self._write_json(archive_dir / f"{period}.json", result)
+        self._write_json(path, result)
 
     def list_archive(self) -> list[dict]:
         """Summaries of all archived periods, newest first; flags the active one."""
@@ -132,10 +148,8 @@ class ScheduleStore:
         return self._read_json(self.diff_path, None)
 
     def get_archived(self, period: str) -> dict | None:
-        if not getattr(self, "archive_dir", None) or not self._PERIOD_RE.match(period or ""):
-            return None
-        path = self.archive_dir / f"{period}.json"
-        if not path.exists():
+        path = self._archive_path(period)
+        if path is None or not path.exists():
             return None
         return json.loads(path.read_text())
 
