@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
-import { timeLabel } from "../utils.js";
+import { shiftClass, timeLabel } from "../utils.js";
 
 export default function MyCalendar({ schedule, user }) {
   const [people, setPeople] = useState([]);
@@ -69,7 +69,7 @@ export default function MyCalendar({ schedule, user }) {
             {myShifts.map((s, i) => (
               <li key={i} className={s.available === false ? "out" : ""}>
                 <span className="d">{s.date}</span>
-                <span className="c">{s.code}</span>
+                <span className={shiftClass(s)}>{s.code}</span>
                 <span className="m">{s.meaning || ""}</span>
                 <span className="t">{timeLabel(s)}</span>
                 {s.available === false && <span className="flag">needs coverage</span>}

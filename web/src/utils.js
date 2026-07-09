@@ -18,12 +18,17 @@ export function dayLabel(iso) {
   return { dom: d.getDate(), dow: WEEKDAY[d.getDay()], weekend: d.getDay() === 0 || d.getDay() === 6 };
 }
 
-// CSS class for a shift, based on its level / status.
+const KNOWN_LOCATIONS = new Set(["BC", "HC", "T", "CV", "VLJ", "MOS", "RB", "ENC", "NTAS"]);
+
+// CSS class for a shift, based on its level / status. Day/mid shifts at a
+// known location code get a location-specific color; night always reads as
+// the night pill regardless of location.
 export function shiftClass(s) {
   if (s.available === false) return "shift unavailable";
   if (s.shift_type === "night") return "shift night";
-  if (s.shift_type === "midshift") return "shift midshift";
   if (s.code === "V") return s.approved ? "shift vacation-approved" : "shift vacation";
+  if (KNOWN_LOCATIONS.has(s.code)) return `shift loc-${s.code}`;
+  if (s.shift_type === "midshift") return "shift midshift";
   return "shift day";
 }
 
