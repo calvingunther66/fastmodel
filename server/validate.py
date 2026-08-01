@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import datetime as dt
 
+from schedule_extractor.definitions import canonical_code
+
 # Daily coverage minimums (how many people must be on each location/level per day).
 # Empty by default: the real workbook is availability-oriented (lots of A/V/R/H,
 # few explicit location assignments), so hardcoded BC/HC minimums would flag nearly
@@ -113,7 +115,7 @@ def validate_schedule(schedule: dict, roster: dict | None = None,
                 seen[key] = s.get("code")
 
         for s in p.get("shifts", []):
-            code = (s.get("code") or "").upper()
+            code = canonical_code(s.get("code") or "")
             # unknown code (skip the ones the owner said to ignore)
             if s.get("category") == "unknown" and (s.get("code") or "").strip() not in IGNORED_UNKNOWN:
                 issues.append(_issue(

@@ -22,10 +22,12 @@ from __future__ import annotations
 
 import copy
 
-from schedule_extractor.definitions import decode, shift_window
+from schedule_extractor.definitions import canonical_code, decode, shift_window
 
 # Status codes that mean a person is off / not available to cover that day.
-_OFF_STATUS = {"V", "H", "R", "BDAY", "NO"}
+# E/NRP/JD aren't days off, but the person is committed elsewhere (a class, a
+# course, a courtroom) and equally can't pick up a shift.
+_OFF_STATUS = {"V", "H", "R", "BDAY", "NO", "E", "NRP", "JD"}
 # Status codes that mean a person is explicitly available to be assigned.
 _AVAILABLE_STATUS = {"A", "OK"}
 
@@ -34,6 +36,7 @@ _AVAILABLE_STATUS = {"A", "OK"}
 _OFF_REASON = {
     "V": "on vacation", "H": "on holiday", "R": "requested off",
     "BDAY": "birthday off", "NO": "unavailable",
+    "E": "at education", "NRP": "at the NRP course", "JD": "on jury duty",
 }
 
 
@@ -47,7 +50,7 @@ def _profiles(schedule: dict) -> dict:
         codes, nights = set(), False
         for s in p["shifts"]:
             if s.get("category") == "location":
-                codes.add(s["code"].upper())
+                codes.add(canonical_code(s["code"]))
                 if s.get("shift_type") == "night":
                     nights = True
         prof[name] = {"codes": codes, "nights": nights}
@@ -165,6 +168,7 @@ def _qualified_for(open_code, prof, meta) -> bool:
     the history heuristic (has worked the location before)."""
     if not open_code:
         return False
+    open_code = canonical_code(open_code)
     if meta is not None and meta.get("clinics"):
         return open_code in meta["clinics"]
     return open_code in prof["codes"]

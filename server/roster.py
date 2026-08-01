@@ -15,11 +15,13 @@ import json
 import threading
 from pathlib import Path
 
+from schedule_extractor.definitions import canonical_code
+
 from .config import DATA_DIR
 
 # Placeholder staff (clinic codes match schedule_extractor.definitions).
 _PLACEHOLDER = [
-    {"name": "DOE, JANE", "clinics": ["BC", "HC", "CV"], "employment": "career",
+    {"name": "DOE, JANE", "clinics": ["BC", "HC", "CNV"], "employment": "career",
      "seniority": True, "works_nights": False},
     {"name": "SMITH, ALEX", "clinics": ["BC", "T"], "employment": "career",
      "seniority": False, "works_nights": True},
@@ -27,9 +29,9 @@ _PLACEHOLDER = [
      "seniority": False, "works_nights": True},
     {"name": "PATEL, RAVI", "clinics": ["BC", "ENC"], "employment": "career",
      "seniority": True, "works_nights": False},
-    {"name": "GARCIA, MARIA", "clinics": ["CV", "RB", "MOS"], "employment": "per_diem",
+    {"name": "GARCIA, MARIA", "clinics": ["CNV", "RB", "MOS"], "employment": "per_diem",
      "seniority": False, "works_nights": True},
-    {"name": "NGUYEN, KIM", "clinics": ["BC", "HC", "T", "CV"], "employment": "career",
+    {"name": "NGUYEN, KIM", "clinics": ["BC", "HC", "T", "CNV"], "employment": "career",
      "seniority": False, "works_nights": True},
 ]
 
@@ -70,7 +72,9 @@ class StaffRoster:
             if not name:
                 continue
             out[name.upper()] = {
-                "clinics": {str(c).upper() for c in (s.get("clinics") or [])},
+                # Folded onto canonical spellings so a roster listing "CV" still
+                # matches a schedule that says "CNV".
+                "clinics": {canonical_code(str(c)) for c in (s.get("clinics") or [])},
                 "works_nights": bool(s.get("works_nights", True)),
                 "employment": s.get("employment", "career"),
                 "seniority": bool(s.get("seniority", False)),
@@ -89,7 +93,7 @@ class StaffRoster:
                 continue
             clean.append({
                 "name": str(s["name"]).strip(),
-                "clinics": [str(c).upper() for c in (s.get("clinics") or [])],
+                "clinics": [canonical_code(str(c)) for c in (s.get("clinics") or [])],
                 "employment": s.get("employment") if s.get("employment") in EMPLOYMENT else "career",
                 "seniority": bool(s.get("seniority")),
                 "works_nights": bool(s.get("works_nights", True)),

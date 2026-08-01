@@ -12,24 +12,57 @@ If the format ever changes, update **both** this document and `definitions.py`.
 ## 1. Workbook structure
 
 - The workbook has **several tabs**: working drafts prefixed `KH-`, `NEW-`, `OLD-`,
-  a `…(2)` copy, and the **canonical tab** named like `June 21 - July 18, 26`.
-  **Use the canonical tab.** (The web Upload screen has a dropdown to pick it; the
-  auto-picker chooses the sheet with the most people and can land on a draft.)
+  `Working…`, a `…(2)` copy, and a tab named like `June 21 - July 18, 26`.
+  The auto-picker chooses the sheet with the most people and shifts. **Don't assume
+  the tab with the tidy name is the real one** — in the Sept 13 – Oct 10 workbook
+  the tidy tab is an empty template and all the data lives on
+  `WorkingSept13 - Oct 10,  (4)`. The Upload screen's dropdown overrides the pick.
 - The sheet is **extremely wide** (~16,000 mostly-empty "phantom" columns). Real
   data sits in roughly columns A–AD. This is why LibreOffice can fail to open it;
   the parser ignores the phantom width.
 - The schedule covers ~4 weeks. The title encodes the start (`June 21`) and the
   two-digit year (`26` → 2026).
 
+### Where the title comes from
+
+**Row 1 first, tab name second.** A tab name is not reliably the period title: it
+carries prefixes (`WorkingSept13…`, `KH-2June 21…`) and often drops the year
+entirely. Row 1 holds the real title on every tab, including the drafts.
+
+This matters more than it sounds. Reading "the first three letters" of
+`WorkingSept13 - Oct 10,  (4)` yields `Wor`, which is not a month, so the whole
+schedule silently lands in **January** — every date, every calendar feed, off by
+eight months, with nothing to indicate a problem. The month is now matched by
+**name** anywhere in the title, and a title with no readable month warns.
+
+A bare number at the end of a title is *not* a year: in `Sept 13 - Oct 10` the
+trailing `10` is the day of the month. A year is only read after a comma
+(`…, 26`) or written in full.
+
 ### Rows
 
 | Row(s) | Meaning |
 |--------|---------|
-| Row 1  | Title (`June 21 - July 18, 26`) |
-| Row 2  | **DATE** — day-of-month numbers across the columns (`21, 22, … 30, 1, 2, …`). The month **rolls over** when the number decreases (30 → 1 means July starts). |
-| Row 3  | **DAY** — day-of-week letters (`S M T W Th F S …`). |
+| Row 1  | Title (`June 21 - July 18, 26`) — the authoritative period title |
+| Row 2  | **DATE** — day-of-month numbers across the columns (`21, 22, … 30, 1, 2, …`). The month **rolls over** when the number decreases (30 → 1 means July starts). Only the first cell of each month is a literal; the rest are formulas (`=B2+1`). |
+| Row 3  | **DAY** — day-of-week letters (`S M T W Th F S …`), plain text. |
 | Row 4 onward | **Person blocks**, 3 rows each (see below). |
 | ~Rows 58–62 | **Footer / legend** (a code key, NOT people). Must be excluded. |
+
+Row 3 is the **check on row 2**. The month and year are hand-written in the title,
+so the built dates are compared against the day-of-week letters:
+
+- they agree → the axis is trusted;
+- they disagree and the title stated **no** year → a year within ±2 that does
+  agree is used instead, with a warning;
+- they disagree and the title **did** state a year → the owner's year stands and
+  the disagreement is reported. The parser doesn't overrule what was written down.
+
+Row 3 also tells the parser how wide the calendar is. Because row 2 is mostly
+formulas, a workbook re-saved by anything that doesn't evaluate them (a script, a
+converter) keeps the formulas but loses the cached numbers — those columns then
+read as blank and their days vanish from the schedule. Fewer DATE columns than
+DAY columns now raises a warning naming how many dates were skipped.
 
 ### Person blocks (the core idea)
 
@@ -67,16 +100,31 @@ captured as a **note** instead. Codes fall into three categories.
 |------|---------|---------|
 | `BC`  | Birth Center | no |
 | `HC`  | Hillcrest | no |
-| `CV`  | Convoy | **yes** |
+| `CNV` | Convoy — **this is how the workbooks spell it** | **yes** |
+| `CV`  | Convoy — older short spelling, accepted as an alias of `CNV` | **yes** |
 | `VLJ` | Villa La Jolla | **yes** |
 | `RB`  | RB / Vía Tizón | **yes** |
+| `MC`  | Mid City | **yes** |
 | `MOS` | Medical Office South | **yes** |
 | `ENC` | Encinitas | **yes** (also seen as a night code) |
 | `NTAS`| (night code; full name unconfirmed) | — |
-| `T`   | Triage | — (own hours) |
+| `T`   | Triage — the legend calls it `LJ OBGYN APP A (Triage)` | — (own hours) |
+| `APP` | `LJ OBGYN APP C (Triage/PP)` — a weekend shift, written as `APP` with a `C` on the line below | — (own hours) |
 
 > **Rule of thumb:** *everything that isn't Birth Center or Hillcrest is a clinic.*
-> Clinics = `{CV, VLJ, RB, MOS, ENC}`.
+> Clinics = `{CNV, VLJ, RB, MOS, ENC}`.
+
+**Spelling matters.** `CNV` is what the sheets contain; only `CV` was defined for a
+long time, so every Convoy shift decoded as `unknown` — no meaning, no hours, no
+colour, and invisible to the coverage and qualification engines. Both spellings now
+decode, and `canonical_code()` folds `CV` onto `CNV` before any code is compared
+across sources, so a roster written one way still matches a schedule written the
+other. Pickers and the generator only ever offer the canonical spelling.
+
+Codes are matched **case-insensitively** (`v` is `V`, `bday` is `BDay`) and may be
+1–4 characters — the old 1–3 cap made `NTAS` and `BDay` unreachable even though both
+were defined. A code with a counter typed onto it (`BC6`, a new hire's sixth
+orientation shift) yields the shift plus a note holding the original text.
 
 ### Status / availability (not a worked location)
 
@@ -89,11 +137,26 @@ captured as a **note** instead. Codes fall into three categories.
 | `OK`| **Alias for `A`** (Available / on-call pool) | |
 | `BDay` | Birthday request (off) | Written at the bottom of the box as a request. Not in the sample tab, but appears in other tabs. |
 | `no` | **Unavailable / out sick** | See availability rule below. |
+| `E` | Education | |
+| `NRP` | NRP course (Neonatal Resuscitation Program) | |
+| `JD` | Jury duty | |
+
+`E`, `NRP` and `JD` aren't days off, but the person is committed away from the
+floor, so they carry **no clock window** (the owner hasn't given hours for them)
+and the coverage engine treats them as unable to pick up a shift — same as `V`
+or `R`. If education and NRP days turn out to have fixed hours, add them to
+`shift_window()`.
 
 ### Undefined / ignored
 
 `*` and `UL` appear once each and are intentionally **left undefined** (preserved
 verbatim with `category: "unknown"`). Don't invent meanings for them.
+
+`E`, `MC`, `NRP` and `JD` were unknown until the owner confirmed them (Education,
+Mid City, the Neonatal Resuscitation Program course, jury duty) — they're in the
+tables above now. Anything still unrecognised stays `unknown` and is flagged by the
+validator rather than guessed at: a wrong meaning puts wrong hours in a real
+calendar.
 
 ---
 
@@ -123,22 +186,65 @@ A clinic day is a **full day unless the box's center bar is coloured in** — th
 the visual cue for a split. When split: the **day row** is the **morning** half and
 the **middle row** is the **afternoon** half. Splits are rare ("almost never").
 
-The parser flags a split when, for a date whose **day-row code is a worked
-location**, either (a) both the day row and middle row carry a code, or (b) the
-middle-row cell for that date has a solid fill (the coloured center bar). The
-"worked location" guard is important: a **green vacation fill** spans all three
-rows and must **not** be mistaken for a split bar.
+**Only *relative* colour means anything.** A person's day box is drawn as a single
+fill spanning the day row *and* the middle row, so "the middle-row cell has a fill"
+is true for essentially every worked day in the sheet — that test flagged **68 of 68**
+worked days in the Sept 13 – Oct 10 workbook as splits, which for a clinic would
+have halved the day to an 08:00–12:00 morning.
+
+A split is flagged when, for a date whose **day-row code is a worked location**:
+
+- **(a)** the middle-row cell is filled in a colour that **differs** from the day
+  cell above it — a genuine centre bar drawn across one box; or
+- **(b)** both rows carry a code *and* they are not one filled box.
+
+Both tests are taken relative to the **column baseline** (see below), so column-wide
+shading — which covers the day and middle rows equally — can never look like a bar.
+
+#### The middle row is usually a second line, not a second shift
+
+Every middle-row token in the real workbooks turned out to be the second line of the
+day box's label, sharing the box's fill: `APP` over `C` (the shift is "APP C"), `NRP`
+over `HC`, `BC` over `intern`, `CNV` over `1` (an orientation counter). None is an
+afternoon half. When the middle-row cell is part of one filled box and no centre bar
+is present, its token is recorded as a **note on that date** rather than invented as
+a `midshift` — nothing is lost, and no phantom 13:00–17:00 shift appears in anyone's
+calendar.
 
 ---
 
 ## 4. Colours
 
-- **Green-filled `V`** = **approved vacation**. Two greens are used in the file:
-  bright `00B050` and light `CCFFCC`. The detector treats any fill whose green
-  channel dominates (and is reasonably strong) as green → `approved: true`.
-  A `V` with no fill → `approved: false`.
-- A solid fill on a **middle-row** cell (for a worked location) is read as the
-  **split center bar** (see above).
+Colour in this workbook is **layered**, and only the top layer carries information:
+
+| Layer | What it is | Meaning |
+|-------|-----------|---------|
+| Column shading | Every **Saturday and Sunday** column is filled `CCFFCC` (pale green) top to bottom, across all person rows | none — it's a weekend stripe |
+| Box fill | A person's day box, one colour spanning the day + middle rows | which assignment, visually |
+| A cell that differs from both | a deliberate mark | **this** is the signal |
+
+### The column baseline
+
+Each date column's **baseline** is the fill shared by most of its *empty* cells —
+empty cells show the background undisturbed, and requiring a strict majority means
+one person's box can never be mistaken for the whole column's styling. A fill only
+means something when it differs from its column's baseline.
+
+- **Green-filled `V`** = **approved vacation** — but treat it as weak evidence. The
+  file's real approvals live in **threaded cell comments** ("Requesting vacation…" →
+  "Approved"), which the parser does not read yet (see `DECISIONS.md`). Green is only
+  meaningful when it is *not* the column's own shading. This is the trap: the weekend
+  stripe is a pale green,
+  so a naive green test marks whichever days of a vacation happen to fall on a
+  Saturday or Sunday as approved and the rest of the very same block as not.
+  WRIGHT's unbroken Sept 17–22 vacation came out as four days "not approved" and two
+  days "approved"; COOPER's ten weekday vacation days, all "not approved".
+- Fills may be **theme-based** rather than RGB (Excel's palette colours). Reading
+  only `fgColor.rgb` makes those look like no fill at all — `fill_key()` handles
+  rgb, theme, and indexed fills, and `is_green_fill()` reports theme fills as
+  not-green rather than guessing a colour it cannot resolve.
+- A fill on a **middle-row** cell is a **split center bar** only when it differs
+  from the day cell's fill (see above).
 
 ---
 
@@ -164,6 +270,7 @@ shifts come out `available: false`.
 ```json
 {
   "sheet": "June 21 - July 18, 26",
+  "title": "June 21 - July 18, 26",
   "parsed_sheet": "June 21 - July 18, 26",
   "available_sheets": ["KH-2…", "NEW-3…", "…", "June 21 - July 18, 26"],
   "date_range": { "start": "2026-06-21", "end": "2026-07-18" },
@@ -200,7 +307,9 @@ shifts come out `available: false`.
 ```
 
 Notes: free-text in a date cell is attached with its `date`; free-text in the
-columns to the **right** of the calendar is attached with `date: null`.
+columns to the **right** of the calendar is attached with `date: null`. `sheet` is
+the tab name; `title` is the period title from row 1 — the UI shows `title`, since
+the tab name can be a working name nobody recognises.
 
 ---
 
@@ -225,9 +334,14 @@ columns to the **right** of the calendar is attached with `date: null`.
 |---------|------|
 | Block scan, 3 levels, splits, notes, availability | `roster_extractor.py` → `extract_roster()` |
 | Date header + month rollover | `roster_extractor.py` → `_date_columns()`, `_build_date_axis()` |
+| Period title (row 1 over tab name) | `roster_extractor.py` → `_period_title()`, `_parse_start_month_year()` |
+| DAY-row cross-check + year repair | `roster_extractor.py` → `_weekday_match()`, `_resolve_date_axis()` |
+| Weekend shading vs. real marks | `roster_extractor.py` → `_column_baseline_fills()` |
 | Footer/legend exclusion | `roster_extractor.py` (bounds scan to last named block) |
 | `no` parsing | `roster_extractor.py` → `_parse_no()` |
 | Code → meaning/category | `definitions.py` → `decode()`, `LOCATIONS`, `STATUS`, `CLINICS` |
+| Alias folding (`CV` → `CNV`) | `definitions.py` → `canonical_code()`, `CODE_ALIASES` |
 | Shift time windows | `definitions.py` → `shift_window()` + `*_WINDOW` constants |
-| Green vacation / center bar | `definitions.py` → `is_green_fill()`, `has_solid_fill()` |
+| Green vacation / center bar | `definitions.py` → `is_green_fill()`, `has_solid_fill()`, `fill_key()` |
 | Offset → level | `definitions.py` → `OFFSET_LEVEL` |
+| Regression tests for all of the above | `tests/test_roster_layout.py` |

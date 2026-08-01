@@ -277,8 +277,10 @@ def set_roster(payload: dict, user: dict = Depends(require_cap("manage_roster"))
 
 @app.get("/api/codes")
 def get_codes(user: dict = Depends(require_auth)):
-    from schedule_extractor.definitions import CLINICS, LOCATIONS, STATUS
-    return {"locations": LOCATIONS, "statuses": STATUS, "clinics": sorted(CLINICS)}
+    from schedule_extractor.definitions import CLINIC_CODES, LOCATIONS, STATUS
+    # CLINIC_CODES rather than CLINICS: pickers should offer one spelling per
+    # clinic, not the alternate spellings kept around for reading old files.
+    return {"locations": LOCATIONS, "statuses": STATUS, "clinics": sorted(CLINIC_CODES)}
 
 
 @app.post("/api/schedule/create")

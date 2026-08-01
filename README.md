@@ -125,10 +125,12 @@ Other rules:
   - any **night** shift = `19:30`–`08:00` (crosses midnight)
   - **Birth Center** (`BC`) day = `07:30`–`20:00`; **Hillcrest** (`HC`) day = `07:00`–`19:30`
   - **Triage** (`T`) = `07:30`–`18:00`
-  - **clinics** — everything that isn't BC or HC (`CV`, `VLJ`, `RB`, `MOS`, `ENC`) —
+  - **clinics** — everything that isn't BC or HC (`CNV`, `VLJ`, `RB`, `MOS`, `ENC`) —
     run a **full day `08:00`–`17:00`**, unless the box's **center bar is coloured
     in** (a split), in which case the day row is the **morning** half
-    (`08:00`–`12:00`) and the mid row is the **afternoon** half (`13:00`–`17:00`)
+    (`08:00`–`12:00`) and the mid row is the **afternoon** half (`13:00`–`17:00`).
+    A centre bar means a fill that *differs* from the day cell's — a day box is
+    normally one colour across both rows, which is not a split.
   - status/availability codes (`V`, `R`, `H`, `A`/`OK`, `no`) carry no clock window;
 - a **green-filled `V`** is approved vacation → `"approved": true` (no fill →
   `false`).

@@ -23,11 +23,26 @@ reasoning, and what's still open. Useful when resuming with no chat history.
   They had produced phantom `C`/`APP` codes and false warnings.
 - **Green vacation fill must not be read as a split** — the split "center bar"
   check only applies when the day-row code is a worked location.
+- **The period title comes from row 1, not the tab name** (`Sept 13 – Oct 10` file).
+  Tab names carry prefixes and drop the year; reading the tab name's first three
+  letters put a whole schedule eight months out with no warning.
+- **Colour is read relative to the column, never absolutely.** Weekend columns are
+  shaded pale green and day boxes are one fill across two rows, so an absolute test
+  ("is it green?", "is it filled?") reads styling as data. See `SCHEDULE_FORMAT.md`
+  §4. This one decision kills three separate false-positive classes at once.
+- **The DAY row (row 3) validates the DATE row (row 2)**, and is allowed to *fill in*
+  a year the title never stated — but never to overrule a year the owner did write.
 
 ### Codes / timing (from the owner)
-- Locations: BC, HC, CV, VLJ, RB, MOS, ENC, NTAS, T. **Clinics = everything that
-  isn't BC or HC.** Status: V, R, H (Holiday), A (Available/pool), **OK = A**, BDay,
-  no. `*` and `UL` intentionally left undefined.
+- Locations: BC, HC, **CNV** (Convoy — `CV` kept as an alias), VLJ, RB, **MC**
+  (Mid City), MOS, ENC, NTAS, T, APP. **Clinics = everything that isn't BC or HC.**
+  Status: V, R, H (Holiday), A (Available/pool), **OK = A**, BDay, no, **E**
+  (Education), **NRP** (Neonatal Resuscitation Program course), **JD** (jury duty).
+  `*` and `UL` intentionally left undefined.
+- **E/NRP/JD are "committed elsewhere", not days off** — no clock window, and the
+  coverage engine won't propose them to cover a shift (someone at jury duty can't).
+- `APP` over a `C` is one shift, `LJ OBGYN APP C (Triage/PP)`, 06:30–19:00 weekends
+  — read straight off the sheet's own legend.
 - Times: night 19:30–08:00; BC day 07:30–20:00; HC day 07:00–19:30; triage
   07:30–18:00; clinic full day 08:00–17:00 (morning 8–12 / afternoon 1–5 when split).
   Confirmed against the sheet's own legend.
@@ -192,17 +207,48 @@ All standard-library / no new runtime deps; each item shipped as its own commit.
 ## Open items / future work
 
 - **Clinic split (morning/afternoon)** detection via a coloured center bar is
-  implemented but **unverified** — no split appeared in the sample month. Confirm
-  against a real split before trusting `split_day`/half-day times.
+  implemented but **still unverified** — no genuine split has appeared in any real
+  month yet. Two months' worth of "splits" turned out to be the day box's own
+  two-row fill, which is now excluded; every middle-row token seen so far has been
+  the second line of a box label, not an afternoon half. Confirm against a real
+  split before trusting `split_day`/half-day times.
+- **`E`/`MC`/`NRP`/`JD` — answered by the owner:** Education, Mid City, the Neonatal
+  Resuscitation Program course, jury duty. Now defined. **Mid City runs the standard
+  clinic day (08:00–17:00)** — owner-confirmed, no special hours. Still open: `E` and
+  `NRP` are work days carried as all-day markers because no hours were given, so add
+  windows to `shift_window()` if they turn out to have fixed ones.
+- **Threaded Excel comments are real schedule data, and the parser drops them.**
+  The Sept 13 – Oct 10 workbook has ~9 cell comments (`cell.comment`, readable via
+  openpyxl) anchored to specific person/date cells. They carry things the grid
+  cannot express:
+    - **vacation approvals** — a request in the comment and an "Approved" reply.
+      This is the *actual* approval signal; the green-fill rule is unreliable
+      (see §4 of `SCHEDULE_FORMAT.md` — pale green is weekend shading), so a `V`
+      can read as unapproved while its comment thread says otherwise;
+    - **availability caveats** — e.g. a night-row comment saying no night shift;
+    - **coordinator decisions and hand-offs** — shifts moved to a placeholder
+      person, hours added or removed, a request declined because too many are off.
+  Worth ingesting: attach each comment to the person/date as a note, and use an
+  approval reply on a `V` to set `approved`. **Careful: the comment text contains
+  real full names** (Excel `@mention`s), so it is PII — it must go into the parsed
+  JSON in `data/` only, and must never be committed or pasted into docs/tests.
 - **`ENC` / `NTAS`** full names unconfirmed; `NTAS` has no day-time window. `ENC`
   is treated as a clinic but also appears as a night code.
 - **`*` and `UL`** remain undefined (owner said to ignore for now).
+- **Formula-only DATE rows.** Row 2 is `=B2+1` across most columns, so a workbook
+  re-saved by any tool that doesn't evaluate formulas loses those dates. The parser
+  now warns (comparing the DATE row's width to the DAY row's) but does **not**
+  reconstruct the missing day numbers. Interpolating them from the DAY row would be
+  possible if this ever happens for real.
 - **Edge case:** a `BC` on the middle row (e.g. CORTES, tied to a `no`) currently
   gets the BC *day* window even though it's a midshift; it's flagged unavailable so
   it has low impact, but revisit if midshift BC becomes common.
-- **Auto-sheet picker** can select a draft tab on upload; the owner should pick the
-  canonical tab from the Upload dropdown. Could persist the chosen sheet, or prefer
-  tabs without `KH-/NEW-/OLD-` prefixes.
+- **Auto-sheet picker** selects the tab with the most people and shifts, which can be
+  a draft. Note this is often *correct*: in the Sept 13 – Oct 10 workbook the
+  tidily-named `September 13 - October 10, 26` tab is an empty template and the real
+  schedule lives on `WorkingSept13 - Oct 10,  (4)`. A "prefer the non-draft name"
+  rule would have picked the empty one. The Upload dropdown remains the override;
+  the header now shows the row-1 period title rather than the tab name.
 - **Coverage engine (trial, built):** the **Coverage** tab lets an admin mark a
   shift out sick; it flags the shift open, proposes **free** covers (Available
   pool / unscheduled, ranked by qualification + night experience) and **move**
