@@ -19,6 +19,7 @@ LOCATIONS = {
     "CNV": "Convoy",         # how the real workbooks spell it
     "CV": "Convoy",          # older/short spelling, kept as an alias
     "VLJ": "Villa La Jolla",
+    "MC": "Mid City",
     "MOS": "Medical Office South",
     "T": "Triage",
     "APP": "LJ OBGYN APP C (Triage/PP)",   # legend: 6:30a-7p, weekends
@@ -28,6 +29,10 @@ LOCATIONS = {
 }
 
 # Status / availability markers (not a specific worked location).
+#
+# E / NRP / JD are commitments away from the floor: the person is spoken for that
+# day but isn't at a clinic, so they carry no clock window and the coverage engine
+# treats them as unavailable to cover (see server/coverage.py).
 STATUS = {
     "V": "Vacation",
     "R": "Request (requested day)",
@@ -36,6 +41,9 @@ STATUS = {
     "H": "Holiday",
     "A": "Available / on-call pool",
     "OK": "Available / on-call pool",   # OK is an alias for A
+    "E": "Education",
+    "NRP": "NRP course (Neonatal Resuscitation Program)",
+    "JD": "Jury duty",
 }
 
 # Alternate spellings seen across workbooks, mapped to the spelling the sheets
@@ -47,7 +55,7 @@ CODE_ALIASES = {"CV": "CNV"}
 # standard full day unless the box's center bar is coloured in (a split).
 # CLINIC_CODES is the canonical list to offer in pickers and generate from;
 # CLINICS also accepts the aliases, for recognising what's already in a file.
-CLINIC_CODES = ["CNV", "VLJ", "RB", "MOS", "ENC"]
+CLINIC_CODES = ["CNV", "VLJ", "RB", "MC", "MOS", "ENC"]
 CLINICS = set(CLINIC_CODES) | {"CV"}
 
 # Shift windows. (start, end, crosses_midnight)

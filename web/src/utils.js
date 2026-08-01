@@ -26,7 +26,9 @@ export function dayLabel(iso) {
   return { dom: d.getDate(), dow: WEEKDAY[d.getDay()], weekend: d.getDay() === 0 || d.getDay() === 6 };
 }
 
-const KNOWN_LOCATIONS = new Set(["BC", "HC", "T", "APP", "CNV", "VLJ", "MOS", "RB", "ENC", "NTAS"]);
+const KNOWN_LOCATIONS = new Set([
+  "BC", "HC", "T", "APP", "CNV", "VLJ", "MC", "MOS", "RB", "ENC", "NTAS",
+]);
 
 // Alternate spellings, folded onto the code the stylesheet has a colour for.
 // Mirrors CODE_ALIASES in schedule_extractor/definitions.py.

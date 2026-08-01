@@ -325,6 +325,7 @@ thead .sticky.name-col { z-index: 3; color: var(--muted); font-weight: 600; }
 .shift.loc-CNV { border: 1.8px solid oklch(0.58 0.08 140); color: color-mix(in oklch, oklch(0.58 0.08 140), var(--ink) 32%); background: color-mix(in oklch, oklch(0.58 0.08 140) 12%, var(--card)); }
 .shift.loc-APP { border: 1.8px solid oklch(0.62 0.12 96); color: color-mix(in oklch, oklch(0.62 0.12 96), var(--ink) 32%); background: color-mix(in oklch, oklch(0.62 0.12 96) 12%, var(--card)); }
 .shift.loc-VLJ { border: 1.8px solid oklch(0.58 0.07 205); color: color-mix(in oklch, oklch(0.58 0.07 205), var(--ink) 32%); background: color-mix(in oklch, oklch(0.58 0.07 205) 12%, var(--card)); }
+.shift.loc-MC { border: 1.8px solid oklch(0.56 0.09 340); color: color-mix(in oklch, oklch(0.56 0.09 340), var(--ink) 32%); background: color-mix(in oklch, oklch(0.56 0.09 340) 12%, var(--card)); }
 .shift.loc-MOS { border: 1.8px solid oklch(0.55 0.08 305); color: color-mix(in oklch, oklch(0.55 0.08 305), var(--ink) 32%); background: color-mix(in oklch, oklch(0.55 0.08 305) 12%, var(--card)); }
 .shift.loc-RB { border: 1.8px solid oklch(0.57 0.11 355); color: color-mix(in oklch, oklch(0.57 0.11 355), var(--ink) 32%); background: color-mix(in oklch, oklch(0.57 0.11 355) 12%, var(--card)); }
 .shift.loc-ENC { border: 1.8px solid oklch(0.55 0.10 255); color: color-mix(in oklch, oklch(0.55 0.10 255), var(--ink) 32%); background: color-mix(in oklch, oklch(0.55 0.10 255) 12%, var(--card)); }

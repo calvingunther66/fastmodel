@@ -34,10 +34,13 @@ reasoning, and what's still open. Useful when resuming with no chat history.
   a year the title never stated — but never to overrule a year the owner did write.
 
 ### Codes / timing (from the owner)
-- Locations: BC, HC, **CNV** (Convoy — `CV` kept as an alias), VLJ, RB, MOS, ENC,
-  NTAS, T, APP. **Clinics = everything that isn't BC or HC.** Status: V, R,
-  H (Holiday), A (Available/pool), **OK = A**, BDay, no. `*` and `UL` intentionally
-  left undefined.
+- Locations: BC, HC, **CNV** (Convoy — `CV` kept as an alias), VLJ, RB, **MC**
+  (Mid City), MOS, ENC, NTAS, T, APP. **Clinics = everything that isn't BC or HC.**
+  Status: V, R, H (Holiday), A (Available/pool), **OK = A**, BDay, no, **E**
+  (Education), **NRP** (Neonatal Resuscitation Program course), **JD** (jury duty).
+  `*` and `UL` intentionally left undefined.
+- **E/NRP/JD are "committed elsewhere", not days off** — no clock window, and the
+  coverage engine won't propose them to cover a shift (someone at jury duty can't).
 - `APP` over a `C` is one shift, `LJ OBGYN APP C (Triage/PP)`, 06:30–19:00 weekends
   — read straight off the sheet's own legend.
 - Times: night 19:30–08:00; BC day 07:30–20:00; HC day 07:00–19:30; triage
@@ -209,9 +212,12 @@ All standard-library / no new runtime deps; each item shipped as its own commit.
   two-row fill, which is now excluded; every middle-row token seen so far has been
   the second line of a box label, not an afternoon half. Confirm against a real
   split before trusting `split_day`/half-day times.
-- **Undefined codes in the Sept 13 – Oct 10 file:** `E` (7×), `MC` (6×), `NRP`, `JD`.
-  Left as `unknown` on purpose — the validator flags each one. **Ask the owner what
-  they mean**; guessing would put wrong hours in a real calendar.
+- **`E`/`MC`/`NRP`/`JD` — answered by the owner:** Education, Mid City, the Neonatal
+  Resuscitation Program course, jury duty. Now defined. Two follow-ups: `MC` inherits
+  the standard clinic day (08:00–17:00) from the "anything that isn't BC or HC is a
+  clinic" rule — **confirm Mid City actually runs those hours**; and `E`/`NRP` are
+  work days carried as all-day markers because no hours were given, so add windows
+  to `shift_window()` if they have fixed ones.
 - **`ENC` / `NTAS`** full names unconfirmed; `NTAS` has no day-time window. `ENC`
   is treated as a clinic but also appears as a night code.
 - **`*` and `UL`** remain undefined (owner said to ignore for now).

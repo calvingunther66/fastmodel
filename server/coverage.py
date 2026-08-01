@@ -25,7 +25,9 @@ import copy
 from schedule_extractor.definitions import canonical_code, decode, shift_window
 
 # Status codes that mean a person is off / not available to cover that day.
-_OFF_STATUS = {"V", "H", "R", "BDAY", "NO"}
+# E/NRP/JD aren't days off, but the person is committed elsewhere (a class, a
+# course, a courtroom) and equally can't pick up a shift.
+_OFF_STATUS = {"V", "H", "R", "BDAY", "NO", "E", "NRP", "JD"}
 # Status codes that mean a person is explicitly available to be assigned.
 _AVAILABLE_STATUS = {"A", "OK"}
 
@@ -34,6 +36,7 @@ _AVAILABLE_STATUS = {"A", "OK"}
 _OFF_REASON = {
     "V": "on vacation", "H": "on holiday", "R": "requested off",
     "BDAY": "birthday off", "NO": "unavailable",
+    "E": "at education", "NRP": "at the NRP course", "JD": "on jury duty",
 }
 
 

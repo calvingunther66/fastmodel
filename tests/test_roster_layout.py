@@ -313,3 +313,38 @@ def test_a_month_that_cannot_hold_the_dates_warns_and_still_parses():
     res = extract_roster(ws)
     assert any("cannot hold the day numbers" in w for w in res["warnings"])
     assert res["people"][0]["shifts"][0]["code"] == "BC"   # data still comes through
+
+
+# --- codes the owner confirmed ------------------------------------------
+
+
+def test_owner_confirmed_codes():
+    """E, MC, NRP and JD, as defined by the schedule owner.
+
+    MC is a location and follows the "anything that isn't BC or HC is a clinic"
+    rule, so it gets the standard clinic day. E/NRP/JD are commitments away from
+    the floor: no clock window, and the coverage engine treats them as off.
+    """
+    ws = _sheet("September 13 - October 10, 26")
+    _person(ws, 4, "SMITH")
+    for col, code in [(2, "E"), (3, "MC"), (4, "NRP"), (5, "JD")]:
+        ws.cell(4, col, code)
+
+    by = {s["code"]: s for s in extract_roster(ws)["people"][0]["shifts"]}
+    assert by["MC"]["category"] == "location"
+    assert by["MC"]["meaning"] == "Mid City"
+    assert (by["MC"]["start"], by["MC"]["end"]) == ("08:00", "17:00")
+    for code, meaning in [("E", "Education"), ("JD", "Jury duty")]:
+        assert by[code]["category"] == "status"
+        assert by[code]["meaning"] == meaning
+        assert by[code]["start"] is None
+    assert by["NRP"]["meaning"].startswith("NRP course")
+
+
+def test_a_commitment_elsewhere_is_not_offered_as_a_cover():
+    """Someone at jury duty or a course must not be proposed to cover a shift."""
+    from server.coverage import _OFF_REASON, _OFF_STATUS
+
+    for code in ("E", "NRP", "JD"):
+        assert code in _OFF_STATUS
+        assert code in _OFF_REASON

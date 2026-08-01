@@ -104,6 +104,7 @@ captured as a **note** instead. Codes fall into three categories.
 | `CV`  | Convoy — older short spelling, accepted as an alias of `CNV` | **yes** |
 | `VLJ` | Villa La Jolla | **yes** |
 | `RB`  | RB / Vía Tizón | **yes** |
+| `MC`  | Mid City | **yes** |
 | `MOS` | Medical Office South | **yes** |
 | `ENC` | Encinitas | **yes** (also seen as a night code) |
 | `NTAS`| (night code; full name unconfirmed) | — |
@@ -136,17 +137,26 @@ orientation shift) yields the shift plus a note holding the original text.
 | `OK`| **Alias for `A`** (Available / on-call pool) | |
 | `BDay` | Birthday request (off) | Written at the bottom of the box as a request. Not in the sample tab, but appears in other tabs. |
 | `no` | **Unavailable / out sick** | See availability rule below. |
+| `E` | Education | |
+| `NRP` | NRP course (Neonatal Resuscitation Program) | |
+| `JD` | Jury duty | |
+
+`E`, `NRP` and `JD` aren't days off, but the person is committed away from the
+floor, so they carry **no clock window** (the owner hasn't given hours for them)
+and the coverage engine treats them as unable to pick up a shift — same as `V`
+or `R`. If education and NRP days turn out to have fixed hours, add them to
+`shift_window()`.
 
 ### Undefined / ignored
 
 `*` and `UL` appear once each and are intentionally **left undefined** (preserved
 verbatim with `category: "unknown"`). Don't invent meanings for them.
 
-The Sept 13 – Oct 10 workbook also uses **`E`** (7×), **`MC`** (6×), **`NRP`** and
-**`JD`** (1× each). These are unconfirmed, so they are left `unknown` rather than
-guessed at — the validator flags each one so the owner can define it. `NRP` is
-plausibly the Neonatal Resuscitation Program class and `JD` jury duty, but neither
-has been confirmed, and a wrong meaning would put wrong hours in someone's calendar.
+`E`, `MC`, `NRP` and `JD` were unknown until the owner confirmed them (Education,
+Mid City, the Neonatal Resuscitation Program course, jury duty) — they're in the
+tables above now. Anything still unrecognised stays `unknown` and is flagged by the
+validator rather than guessed at: a wrong meaning puts wrong hours in a real
+calendar.
 
 ---
 

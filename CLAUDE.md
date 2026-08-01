@@ -86,7 +86,7 @@ web/                       React + Vite frontend (built to web/dist)
                              +generator), Roster, Users, Insights (equity), Activity
   src/api.js, utils.js     fetch wrapper, date/colour helpers
 
-tests/                     pytest (110 tests) — run with `python -m pytest`
+tests/                     pytest (112 tests) — run with `python -m pytest`
 tools/make_sample.py       generate a synthetic workbook for the generic layout
 docs/                      detailed documentation (see table above)
 
@@ -120,7 +120,7 @@ Full Pi/deploy instructions: **`SERVER.md`**.
 
 ### Tests
 ```bash
-python -m pytest            # 110 tests; all should pass
+python -m pytest            # 112 tests; all should pass
 cd web && npm run build     # frontend must compile
 ```
 
@@ -154,8 +154,9 @@ available/approved/split_day`, plus `unavailable[]` and `notes[]`) is documented
 See `docs/DECISIONS.md` for the full list. Highlights:
 - The clinic **split** (morning/afternoon via a coloured "center bar") is encoded
   but hasn't been seen in a real file yet, so the detection is unverified.
-- **Undefined codes awaiting the owner:** `E`, `MC`, `NRP`, `JD` (in the Sept 13 –
-  Oct 10 file). Left as `unknown` and flagged by the validator — don't guess them.
+- `E` (Education), `MC` (Mid City), `NRP` (Neonatal Resuscitation Program course)
+  and `JD` (jury duty) are now defined. Open: whether Mid City really runs the
+  standard 08:00–17:00 clinic day, and whether `E`/`NRP` have fixed hours.
 - `ENC`/`NTAS` full names unconfirmed; `*` and `UL` intentionally left undefined.
 - Auto-sheet picker takes the tab with the most data, which is often a "Working"
   tab — sometimes correctly, since the tidily-named tab can be an empty template.
