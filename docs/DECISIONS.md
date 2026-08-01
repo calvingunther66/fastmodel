@@ -213,11 +213,25 @@ All standard-library / no new runtime deps; each item shipped as its own commit.
   the second line of a box label, not an afternoon half. Confirm against a real
   split before trusting `split_day`/half-day times.
 - **`E`/`MC`/`NRP`/`JD` — answered by the owner:** Education, Mid City, the Neonatal
-  Resuscitation Program course, jury duty. Now defined. Two follow-ups: `MC` inherits
-  the standard clinic day (08:00–17:00) from the "anything that isn't BC or HC is a
-  clinic" rule — **confirm Mid City actually runs those hours**; and `E`/`NRP` are
-  work days carried as all-day markers because no hours were given, so add windows
-  to `shift_window()` if they have fixed ones.
+  Resuscitation Program course, jury duty. Now defined. **Mid City runs the standard
+  clinic day (08:00–17:00)** — owner-confirmed, no special hours. Still open: `E` and
+  `NRP` are work days carried as all-day markers because no hours were given, so add
+  windows to `shift_window()` if they turn out to have fixed ones.
+- **Threaded Excel comments are real schedule data, and the parser drops them.**
+  The Sept 13 – Oct 10 workbook has ~9 cell comments (`cell.comment`, readable via
+  openpyxl) anchored to specific person/date cells. They carry things the grid
+  cannot express:
+    - **vacation approvals** — a request in the comment and an "Approved" reply.
+      This is the *actual* approval signal; the green-fill rule is unreliable
+      (see §4 of `SCHEDULE_FORMAT.md` — pale green is weekend shading), so a `V`
+      can read as unapproved while its comment thread says otherwise;
+    - **availability caveats** — e.g. a night-row comment saying no night shift;
+    - **coordinator decisions and hand-offs** — shifts moved to a placeholder
+      person, hours added or removed, a request declined because too many are off.
+  Worth ingesting: attach each comment to the person/date as a note, and use an
+  approval reply on a `V` to set `approved`. **Careful: the comment text contains
+  real full names** (Excel `@mention`s), so it is PII — it must go into the parsed
+  JSON in `data/` only, and must never be committed or pasted into docs/tests.
 - **`ENC` / `NTAS`** full names unconfirmed; `NTAS` has no day-time window. `ENC`
   is treated as a clinic but also appears as a night code.
 - **`*` and `UL`** remain undefined (owner said to ignore for now).

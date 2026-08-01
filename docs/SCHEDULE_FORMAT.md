@@ -230,8 +230,11 @@ empty cells show the background undisturbed, and requiring a strict majority mea
 one person's box can never be mistaken for the whole column's styling. A fill only
 means something when it differs from its column's baseline.
 
-- **Green-filled `V`** = **approved vacation** — but only when that green is *not*
-  the column's own shading. This is the trap: the weekend stripe is a pale green,
+- **Green-filled `V`** = **approved vacation** — but treat it as weak evidence. The
+  file's real approvals live in **threaded cell comments** ("Requesting vacation…" →
+  "Approved"), which the parser does not read yet (see `DECISIONS.md`). Green is only
+  meaningful when it is *not* the column's own shading. This is the trap: the weekend
+  stripe is a pale green,
   so a naive green test marks whichever days of a vacation happen to fall on a
   Saturday or Sunday as approved and the rest of the very same block as not.
   WRIGHT's unbroken Sept 17–22 vacation came out as four days "not approved" and two

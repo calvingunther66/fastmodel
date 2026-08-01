@@ -155,8 +155,11 @@ See `docs/DECISIONS.md` for the full list. Highlights:
 - The clinic **split** (morning/afternoon via a coloured "center bar") is encoded
   but hasn't been seen in a real file yet, so the detection is unverified.
 - `E` (Education), `MC` (Mid City), `NRP` (Neonatal Resuscitation Program course)
-  and `JD` (jury duty) are now defined. Open: whether Mid City really runs the
-  standard 08:00–17:00 clinic day, and whether `E`/`NRP` have fixed hours.
+  and `JD` (jury duty) are now defined. Mid City runs the standard clinic day
+  (owner-confirmed). Open: whether `E`/`NRP` have fixed hours.
+- **The workbook carries threaded Excel comments that the parser ignores** — they
+  hold vacation approvals, call-out reasons, and coordinator decisions that exist
+  nowhere else in the file. See `docs/DECISIONS.md`.
 - `ENC`/`NTAS` full names unconfirmed; `*` and `UL` intentionally left undefined.
 - Auto-sheet picker takes the tab with the most data, which is often a "Working"
   tab — sometimes correctly, since the tidily-named tab can be an empty template.
