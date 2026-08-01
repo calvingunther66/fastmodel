@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import copy
 
-from schedule_extractor.definitions import decode, shift_window
+from schedule_extractor.definitions import canonical_code, decode, shift_window
 
 # Status codes that mean a person is off / not available to cover that day.
 _OFF_STATUS = {"V", "H", "R", "BDAY", "NO"}
@@ -47,7 +47,7 @@ def _profiles(schedule: dict) -> dict:
         codes, nights = set(), False
         for s in p["shifts"]:
             if s.get("category") == "location":
-                codes.add(s["code"].upper())
+                codes.add(canonical_code(s["code"]))
                 if s.get("shift_type") == "night":
                     nights = True
         prof[name] = {"codes": codes, "nights": nights}
@@ -165,6 +165,7 @@ def _qualified_for(open_code, prof, meta) -> bool:
     the history heuristic (has worked the location before)."""
     if not open_code:
         return False
+    open_code = canonical_code(open_code)
     if meta is not None and meta.get("clinics"):
         return open_code in meta["clinics"]
     return open_code in prof["codes"]

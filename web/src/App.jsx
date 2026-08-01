@@ -148,7 +148,11 @@ export default function App() {
 
       {schedule?.parsed_sheet && (
         <div className="subbar">
-          <strong>{schedule.parsed_sheet}</strong>
+          {/* The tab name can be a working title ("WorkingSept13 - Oct 10,  (4)");
+              the sheet's own row-1 title is the one people recognise. */}
+          <strong title={schedule.parsed_sheet}>
+            {schedule.title || schedule.parsed_sheet}
+          </strong>
           {schedule.date_range && (
             <span className="muted"> · {schedule.date_range.start} → {schedule.date_range.end}</span>
           )}

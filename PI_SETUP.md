@@ -56,7 +56,8 @@ do anything with this section — it's context.
 
 3. **Code & timing definitions** (`schedule_extractor/definitions.py`, the other
    important file — the single source of truth for codes). Locations: `BC`, `HC`,
-   `CV`, `VLJ`, `RB`, `MOS`, `ENC`, `NTAS`, `T`. **A clinic = anything that isn't BC
+   `CNV` (Convoy; `CV` is an accepted alias), `VLJ`, `RB`, `MOS`, `ENC`, `NTAS`,
+   `T`, `APP`. **A clinic = anything that isn't BC
    or HC.** Status codes: `V` vacation, `R` request, `H` holiday, `A`/`OK`
    available-pool, `BDay`, `no` unavailable. Times: night `19:30–08:00`; BC day
    `07:30–20:00`; HC day `07:00–19:30`; triage `07:30–18:00`; clinic full day

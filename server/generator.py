@@ -33,7 +33,7 @@ DEFAULT_REQUIREMENTS = [
 ]
 
 # Clinics to try to staff on weekdays if qualified people are spare.
-WEEKDAY_CLINICS = ["CV", "VLJ", "MOS", "RB", "ENC"]
+WEEKDAY_CLINICS = ["CNV", "VLJ", "MOS", "RB", "ENC"]
 
 
 def _dates(start: str, end: str) -> list[str]:

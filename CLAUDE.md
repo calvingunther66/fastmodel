@@ -86,7 +86,7 @@ web/                       React + Vite frontend (built to web/dist)
                              +generator), Roster, Users, Insights (equity), Activity
   src/api.js, utils.js     fetch wrapper, date/colour helpers
 
-tests/                     pytest (90 tests) — run with `python -m pytest`
+tests/                     pytest (110 tests) — run with `python -m pytest`
 tools/make_sample.py       generate a synthetic workbook for the generic layout
 docs/                      detailed documentation (see table above)
 
@@ -120,7 +120,7 @@ Full Pi/deploy instructions: **`SERVER.md`**.
 
 ### Tests
 ```bash
-python -m pytest            # 10 tests; all should pass
+python -m pytest            # 110 tests; all should pass
 cd web && npm run build     # frontend must compile
 ```
 
@@ -154,8 +154,17 @@ available/approved/split_day`, plus `unavailable[]` and `notes[]`) is documented
 See `docs/DECISIONS.md` for the full list. Highlights:
 - The clinic **split** (morning/afternoon via a coloured "center bar") is encoded
   but hasn't been seen in a real file yet, so the detection is unverified.
+- **Undefined codes awaiting the owner:** `E`, `MC`, `NRP`, `JD` (in the Sept 13 –
+  Oct 10 file). Left as `unknown` and flagged by the validator — don't guess them.
 - `ENC`/`NTAS` full names unconfirmed; `*` and `UL` intentionally left undefined.
-- Auto-sheet picker may choose a draft tab; the Upload screen has a sheet dropdown
-  to select the correct one (`June 21 - July 18, 26`).
+- Auto-sheet picker takes the tab with the most data, which is often a "Working"
+  tab — sometimes correctly, since the tidily-named tab can be an empty template.
+  The Upload screen's dropdown overrides it.
 - Not built yet: a "who can cover a called-out shift" view; CSV / push-to-Google
   export.
+
+**Reading the spreadsheet's colours:** only *relative* colour means anything.
+Weekend columns are shaded pale green for everyone and each day box is a single
+fill spanning two rows, so any absolute test ("is it green?", "is it filled?")
+reads styling as data. Compare against the column baseline — `docs/SCHEDULE_FORMAT.md`
+§4.
