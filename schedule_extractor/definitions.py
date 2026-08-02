@@ -179,6 +179,11 @@ def apply_triage_weekly_adjustment(shifts: list[dict]) -> None:
     Weeks are grouped Sunday-Saturday. "Other hours" for a given triage shift is
     the sum of that week's other worked (category == "location") shifts — other
     triage shifts that week count, only the shift being adjusted is excluded.
+
+    Every *other* triage shift that week counts at its nominal
+    `TRIAGE_STANDARD_HOURS`, never its current (possibly already-shortened)
+    duration — otherwise shortening one triage would change the hours seen by
+    another, making the result depend on how many times this has already run.
     """
     by_week: dict[str, list[dict]] = {}
     for s in shifts:
@@ -186,13 +191,17 @@ def apply_triage_weekly_adjustment(shifts: list[dict]) -> None:
             by_week.setdefault(_week_start(s["date"]), []).append(s)
 
     for week_shifts in by_week.values():
-        hours = {id(s): _duration_hours(s.get("start"), s.get("end"), s.get("crosses_midnight"))
-                 for s in week_shifts}
-        total = sum(hours.values())
+        def _nominal(s):
+            if (s.get("code") or "").strip().upper() == "T":
+                return TRIAGE_STANDARD_HOURS
+            return _duration_hours(s.get("start"), s.get("end"), s.get("crosses_midnight"))
+
+        nominal = {id(s): _nominal(s) for s in week_shifts}
+        total = sum(nominal.values())
         for s in week_shifts:
             if (s.get("code") or "").strip().upper() != "T":
                 continue
-            start, end, crosses = triage_window(total - hours[id(s)])
+            start, end, crosses = triage_window(total - nominal[id(s)])
             s["start"], s["end"], s["crosses_midnight"] = start, end, crosses
 
 
