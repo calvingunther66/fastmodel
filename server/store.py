@@ -21,7 +21,7 @@ from pathlib import Path
 
 import openpyxl
 
-from schedule_extractor.definitions import decode, shift_window
+from schedule_extractor.definitions import apply_triage_weekly_adjustment, decode, shift_window
 from schedule_extractor.roster_extractor import extract_roster
 
 from .config import DATA_DIR
@@ -243,6 +243,7 @@ class ScheduleStore:
                             "start": s_t, "end": e_t, "crosses_midnight": cross,
                             "available": True,
                         })
+                apply_triage_weekly_adjustment(shifts)
                 shifts.sort(key=lambda s: (s["date"], s["shift_type"]))
                 people.append({
                     "name": name, "contact": (contacts or {}).get(name, []),

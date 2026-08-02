@@ -76,6 +76,17 @@ keep working (tokens are stable) and users stay logged in (the key persists).
 So when you ask me for code changes later, the flow is just `git pull` →
 `docker compose up -d --build`; nothing is reset.
 
+Some changes only affect *new* uploads unless you also run a one-off migration
+against the data already on disk. Check the PR/commit description for one — e.g.
+after the triage-hours rule change:
+
+```bash
+docker compose exec schedule python tools/fix_triage_hours.py          # preview
+docker compose exec schedule python tools/fix_triage_hours.py --apply  # write it
+```
+
+Safe to run more than once (it's a no-op the second time).
+
 ### Back up / restore the data
 
 ```bash

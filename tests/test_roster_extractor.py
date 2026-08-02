@@ -59,6 +59,35 @@ def test_roster_levels_and_enrichment():
     assert "long free text note here" in note_texts   # non-code in a date cell
 
 
+def test_triage_shortened_when_week_would_exceed_40_hours():
+    """A full 10h triage that would push the week over 40h runs 8h instead;
+    the same person's triage the following (lighter) week stays standard."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "June 21 - June 28, 26"
+    ws.cell(2, 1, "DATE")
+    for col, day in enumerate(range(21, 29), start=2):
+        ws.cell(2, col, day)
+    ws.cell(4, 1, "CLARK")
+    # Sun 21 - Wed 24: four 9h clinic days (36h) -> pushes a 10h triage over 40h.
+    ws.cell(4, 2, "CV")   # Jun 21
+    ws.cell(4, 3, "CV")   # Jun 22
+    ws.cell(4, 4, "CV")   # Jun 23
+    ws.cell(4, 5, "CV")   # Jun 24
+    ws.cell(4, 6, "T")    # Jun 25 -> triage, same week as the 36h above
+    ws.cell(4, 9, "T")    # Jun 28 -> triage, new week (Sun), no other hours
+
+    by_date = {s["date"]: s for s in extract_roster(ws)["people"][0]["shifts"]}
+    shortened = by_date["2026-06-25"]
+    assert (shortened["start"], shortened["end"], shortened["crosses_midnight"]) == (
+        "07:30", "16:00", False,
+    )
+    standard = by_date["2026-06-28"]
+    assert (standard["start"], standard["end"], standard["crosses_midnight"]) == (
+        "07:30", "18:00", False,
+    )
+
+
 def test_location_day_windows():
     """BC/HC days use legend hours; clinics default to a full 8-5 day."""
     wb = openpyxl.Workbook()
