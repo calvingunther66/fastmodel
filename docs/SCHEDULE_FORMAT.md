@@ -173,12 +173,14 @@ left blank (`start`/`end` = `null`). The **legend at the bottom of the sheet**
 | **Birth Center day** (`BC`, day) | `07:30` → `20:00` | no |
 | **Hillcrest day** (`HC`, day) | `07:00` → `19:30` | no |
 | **Triage** (`T`) | `07:30` → `18:00` | no |
-| **Clinic full day** (CV/VLJ/RB/MOS/ENC) | `08:00` → `17:00` | no |
+| **Clinic full day** (CV/VLJ/MOS) | `08:00` → `17:00` | no |
+| **RB / Encinitas full day** (RB/ENC) | `07:00` → `16:00` | no |
 | **Clinic morning** (split, day row) | `08:00` → `12:00` | no |
 | **Clinic afternoon** (split, mid row) | `13:00` → `17:00` | no |
 | Status codes (`V`,`R`,`H`,`A`,`OK`,`no`) | — none — | — |
 
-Morning clinic = **8–12**, afternoon clinic = **1–5**, full clinic day = **8–5**.
+Morning clinic = **8–12**, afternoon clinic = **1–5**, full clinic day = **8–5** —
+except RB and Encinitas, which run **7–4** (owner-confirmed).
 
 ### Splits (clinic morning/afternoon)
 
