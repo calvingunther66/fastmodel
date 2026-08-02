@@ -46,6 +46,13 @@ reasoning, and what's still open. Useful when resuming with no chat history.
 - Times: night 19:30–08:00; BC day 07:30–20:00; HC day 07:00–19:30; triage
   07:30–18:00; clinic full day 08:00–17:00 (morning 8–12 / afternoon 1–5 when split).
   Confirmed against the sheet's own legend.
+- **Triage shortens to 8h when a full 10h triage would push the week over 40h.**
+  A standard triage is 07:30–18:00 (10h). If the person's other worked hours that
+  week (Sunday–Saturday, not counting this triage) plus 10h would exceed 40h, the
+  triage instead runs 07:30–16:00 (8h). Applies to uploaded workbooks and the
+  Create-tab builder alike (`apply_triage_weekly_adjustment` in `definitions.py`).
+  Already-live schedules need `tools/fix_triage_hours.py` run once after deploy to
+  pick up the corrected hours retroactively (it's idempotent).
 
 ### Web app
 - **Stack:** FastAPI (reuses the Python parser) + React/Vite, run as **one process**.

@@ -172,7 +172,7 @@ left blank (`start`/`end` = `null`). The **legend at the bottom of the sheet**
 | **Any night** (offset 2) | `19:30` → `08:00` | yes |
 | **Birth Center day** (`BC`, day) | `07:30` → `20:00` | no |
 | **Hillcrest day** (`HC`, day) | `07:00` → `19:30` | no |
-| **Triage** (`T`) | `07:30` → `18:00` | no |
+| **Triage** (`T`) | `07:30` → `18:00` (10h), or `07:30` → `16:00` (8h) — see below | no |
 | **Clinic full day** (CV/VLJ/MOS) | `08:00` → `17:00` | no |
 | **RB / Encinitas full day** (RB/ENC) | `07:00` → `16:00` | no |
 | **Clinic morning** (split, day row) | `08:00` → `12:00` | no |
@@ -181,6 +181,16 @@ left blank (`start`/`end` = `null`). The **legend at the bottom of the sheet**
 
 Morning clinic = **8–12**, afternoon clinic = **1–5**, full clinic day = **8–5** —
 except RB and Encinitas, which run **7–4** (owner-confirmed).
+
+### Triage hours vs. the person's week
+
+A standard triage shift is 10 hours (`07:30`–`18:00`). But if that 10 hours would
+push the person's Sunday–Saturday week over 40 **worked** hours (summing their
+other location shifts that week, not counting this triage), the triage shift
+instead runs 8 hours: `07:30`–`16:00`. This is computed automatically —
+`schedule_extractor.definitions.apply_triage_weekly_adjustment` — for both
+uploaded workbooks and schedules built in the app's Create tab. Owner-set rule;
+see [`DECISIONS.md`](DECISIONS.md).
 
 ### Splits (clinic morning/afternoon)
 

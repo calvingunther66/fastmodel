@@ -5,12 +5,16 @@ verbatim with ``category = "unknown"`` so it is never silently dropped.
 
 Timing notes (from the owner):
 * Night shift: 19:30 -> 08:00 (next day). Applies to any code on the night row.
-* Triage (T): 07:30 -> 18:00.
+* Triage (T): 07:30 -> 18:00 (10h), unless a full 10h triage would push the
+  person's week (Sun-Sat) over 40 worked hours, in which case it runs
+  07:30 -> 16:00 (8h) instead. See `apply_triage_weekly_adjustment`.
 * Day-shift length varies by location/assignment, so day start/end are left null
   until a per-location day-hours table is provided.
 """
 
 from __future__ import annotations
+
+import datetime as dt
 
 # Location / assignment codes (where the person is working that shift).
 LOCATIONS = {
@@ -60,7 +64,10 @@ CLINICS = set(CLINIC_CODES) | {"CV"}
 
 # Shift windows. (start, end, crosses_midnight)
 NIGHT_WINDOW = ("19:30", "08:00", True)     # any night row (legend: 7:30p-8a)
-TRIAGE_WINDOW = ("07:30", "18:00", False)   # T (legend: 7:30a-6p)
+TRIAGE_WINDOW = ("07:30", "18:00", False)   # T (legend: 7:30a-6p) — standard, 10h
+TRIAGE_SHORT_WINDOW = ("07:30", "16:00", False)  # T reduced to 8h to avoid weekly OT
+TRIAGE_STANDARD_HOURS = 10.0   # nominal length used to test the 40h weekly trigger
+MAX_WEEKLY_HOURS = 40.0        # a full triage that would push the week past this shortens it
 BC_DAY_WINDOW = ("07:30", "20:00", False)   # Birth Center day (legend: 7:30a-8p)
 HC_DAY_WINDOW = ("07:00", "19:30", False)   # Hillcrest day (legend: 7:00a-7:30p)
 CLINIC_DAY_WINDOW = ("08:00", "17:00", False)        # full clinic day
@@ -133,6 +140,60 @@ def shift_window(code: str, shift_type: str, split: bool = False):
             return CLINIC_AFTERNOON_WINDOW
         return CLINIC_MORNING_WINDOW if split else CLINIC_DAY_WINDOW
     return (None, None, False)  # unknown / undefined timing
+
+
+def triage_window(other_week_hours: float):
+    """(start, end, crosses_midnight) for a Triage shift, given the person's other
+    worked hours that week (Sunday-Saturday, excluding this triage shift).
+
+    A standard 10h triage (07:30-18:00) that would push the week over 40 hours
+    instead runs 8h (07:30-16:00). Set by the schedule owner.
+    """
+    if other_week_hours + TRIAGE_STANDARD_HOURS > MAX_WEEKLY_HOURS:
+        return TRIAGE_SHORT_WINDOW
+    return TRIAGE_WINDOW
+
+
+def _week_start(date: str) -> str:
+    """The Sunday (ISO date) that starts the calendar week containing `date`."""
+    d = dt.date.fromisoformat(date)
+    since_sunday = (d.weekday() + 1) % 7  # Python weekday(): Monday=0 ... Sunday=6
+    return (d - dt.timedelta(days=since_sunday)).isoformat()
+
+
+def _duration_hours(start: str | None, end: str | None, crosses: bool) -> float:
+    if not start or not end:
+        return 0.0
+    sh, sm = (int(x) for x in start.split(":"))
+    eh, em = (int(x) for x in end.split(":"))
+    span = (eh * 60 + em) - (sh * 60 + sm)
+    if crosses or span <= 0:
+        span += 24 * 60
+    return span / 60.0
+
+
+def apply_triage_weekly_adjustment(shifts: list[dict]) -> None:
+    """Recompute every Triage shift's start/end/crosses_midnight in `shifts` (one
+    person's shift list) in place, per `triage_window`.
+
+    Weeks are grouped Sunday-Saturday. "Other hours" for a given triage shift is
+    the sum of that week's other worked (category == "location") shifts — other
+    triage shifts that week count, only the shift being adjusted is excluded.
+    """
+    by_week: dict[str, list[dict]] = {}
+    for s in shifts:
+        if s.get("category") == "location" and s.get("date"):
+            by_week.setdefault(_week_start(s["date"]), []).append(s)
+
+    for week_shifts in by_week.values():
+        hours = {id(s): _duration_hours(s.get("start"), s.get("end"), s.get("crosses_midnight"))
+                 for s in week_shifts}
+        total = sum(hours.values())
+        for s in week_shifts:
+            if (s.get("code") or "").strip().upper() != "T":
+                continue
+            start, end, crosses = triage_window(total - hours[id(s)])
+            s["start"], s["end"], s["crosses_midnight"] = start, end, crosses
 
 
 # Theme indices 0 and 1 are the workbook's light/dark *background* colours (white

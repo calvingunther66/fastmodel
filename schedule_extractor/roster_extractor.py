@@ -29,6 +29,7 @@ import re
 
 from .definitions import (
     OFFSET_LEVEL,
+    apply_triage_weekly_adjustment,
     decode,
     fill_key,
     is_green_fill,
@@ -476,6 +477,8 @@ def extract_roster(ws, *, default_year: int = 2026,
                     and is_green_fill(cell)
                 )
             shifts.append(shift)
+
+        apply_triage_weekly_adjustment(shifts)
 
         unavailable = [
             {"date": d, "reason": "not available / out sick"}
