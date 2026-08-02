@@ -67,6 +67,10 @@ CLINIC_DAY_WINDOW = ("08:00", "17:00", False)        # full clinic day
 CLINIC_MORNING_WINDOW = ("08:00", "12:00", False)    # split: morning half
 CLINIC_AFTERNOON_WINDOW = ("13:00", "17:00", False)  # split: afternoon half
 APP_DAY_WINDOW = ("06:30", "19:00", False)           # APP (legend: 6:30a-7p Wkend)
+RB_ENC_DAY_WINDOW = ("07:00", "16:00", False)        # RB / Encinitas (owner-confirmed)
+
+# Clinics that run 7a-4p instead of the standard 8a-5p day.
+_EARLY_CLINICS = {"RB", "ENC"}
 
 # Row offset within a person's 3-row block -> shift level.
 OFFSET_LEVEL = {0: "day", 1: "midshift", 2: "night"}
@@ -121,6 +125,10 @@ def shift_window(code: str, shift_type: str, split: bool = False):
     if upper == "HC":
         return HC_DAY_WINDOW
     if upper in CLINICS:
+        if upper in _EARLY_CLINICS:
+            if shift_type == "midshift":
+                return CLINIC_AFTERNOON_WINDOW
+            return CLINIC_MORNING_WINDOW if split else RB_ENC_DAY_WINDOW
         if shift_type == "midshift":
             return CLINIC_AFTERNOON_WINDOW
         return CLINIC_MORNING_WINDOW if split else CLINIC_DAY_WINDOW

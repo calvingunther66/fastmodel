@@ -341,6 +341,20 @@ def test_owner_confirmed_codes():
     assert by["NRP"]["meaning"].startswith("NRP course")
 
 
+def test_rb_and_enc_run_seven_to_four():
+    """RB and Encinitas are 7a-4p, not the standard 8a-5p clinic day."""
+    ws = _sheet("September 13 - October 10, 26")
+    _person(ws, 4, "SMITH")
+    for col, code in [(2, "RB"), (3, "ENC"), (4, "CNV")]:
+        ws.cell(4, col, code)
+
+    by = {s["code"]: s for s in extract_roster(ws)["people"][0]["shifts"]}
+    assert (by["RB"]["start"], by["RB"]["end"]) == ("07:00", "16:00")
+    assert (by["ENC"]["start"], by["ENC"]["end"]) == ("07:00", "16:00")
+    # Unrelated clinics keep the standard day.
+    assert (by["CNV"]["start"], by["CNV"]["end"]) == ("08:00", "17:00")
+
+
 def test_a_commitment_elsewhere_is_not_offered_as_a_cover():
     """Someone at jury duty or a course must not be proposed to cover a shift."""
     from server.coverage import _OFF_REASON, _OFF_STATUS

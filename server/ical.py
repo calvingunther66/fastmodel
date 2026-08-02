@@ -51,8 +51,13 @@ def build_ics(person_name: str, shifts: list[dict], tz_name: str,
             end_dt = dt.datetime(y, mo, d, eh, em, tzinfo=tz)
             if s.get("crosses_midnight"):
                 end_dt += dt.timedelta(days=1)
-            ev.add("dtstart", start_dt)
-            ev.add("dtend", end_dt)
+            # Emit true UTC ('Z') instants rather than a TZID-qualified local
+            # time: without an embedded VTIMEZONE component (which we don't
+            # generate), TZID references are ambiguous per RFC 5545, and
+            # Google Calendar's subscription parser silently reads them as
+            # UTC instead of erroring — shifting every event by the offset.
+            ev.add("dtstart", start_dt.astimezone(dt.timezone.utc))
+            ev.add("dtend", end_dt.astimezone(dt.timezone.utc))
             ev.add("summary", f"{label} ({shift_type})")
             # A real location helps phones group/colour shifts (D3).
             if meaning and s.get("category") == "location":
