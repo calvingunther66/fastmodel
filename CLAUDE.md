@@ -86,7 +86,7 @@ web/                       React + Vite frontend (built to web/dist)
                              +generator), Roster, Users, Insights (equity), Activity
   src/api.js, utils.js     fetch wrapper, date/colour helpers
 
-tests/                     pytest (112 tests) — run with `python -m pytest`
+tests/                     pytest (113 tests) — run with `python -m pytest`
 tools/make_sample.py       generate a synthetic workbook for the generic layout
 docs/                      detailed documentation (see table above)
 
@@ -120,7 +120,7 @@ Full Pi/deploy instructions: **`SERVER.md`**.
 
 ### Tests
 ```bash
-python -m pytest            # 112 tests; all should pass
+python -m pytest            # 113 tests; all should pass
 cd web && npm run build     # frontend must compile
 ```
 
